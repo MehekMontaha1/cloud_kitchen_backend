@@ -1,0 +1,156 @@
+import { useState, useMemo } from 'react';
+import { Card, Button, Badge, Toggle } from '../common';
+
+const formatPrice = (price) => `$${price.toFixed(2)}`;
+
+const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder }) => {
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [sortBy, setSortBy] = useState('eta');
+
+  const categories = useMemo(() => {
+    const cats = ['all', ...new Set(foods.map(f => f.category))];
+    return cats;
+  }, [foods]);
+
+  const filteredAndSortedFoods = useMemo(() => {
+    let result = [...foods];
+
+    if (selectedCategory !== 'all') {
+      result = result.filter(f => f.category === selectedCategory);
+    }
+
+    if (sortBy === 'eta') {
+      result.sort((a, b) => a.eta - b.eta);
+    } else if (sortBy === 'price-low') {
+      result.sort((a, b) => a.price - b.price);
+    } else if (sortBy === 'price-high') {
+      result.sort((a, b) => b.price - a.price);
+    } else if (sortBy === 'rating') {
+      result.sort((a, b) => b.rating - a.rating);
+    }
+
+    return result;
+  }, [foods, selectedCategory, sortBy]);
+
+  const nearbyCount = foods.filter(f => f.eta <= 30).length;
+
+  return (
+    <Card>
+      <div className="mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold text-slate-900">Nearby Foods</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Discover meals delivered within 30 minutes.{' '}
+              <span className="text-emerald-600">{nearbyCount} items available</span>
+            </p>
+          </div>
+          <Toggle
+            checked={showNearbyOnly}
+            onChange={onToggle}
+            label="30-min radius"
+            size="md"
+          />
+        </div>
+      </div>
+
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap gap-2">
+          {categories.map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
+                selectedCategory === cat
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {cat === 'all' ? 'All' : cat}
+            </button>
+          ))}
+        </div>
+
+        <select
+          className="ml-auto rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm"
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+        >
+          <option value="eta">Fastest Delivery</option>
+          <option value="price-low">Price: Low to High</option>
+          <option value="price-high">Price: High to Low</option>
+          <option value="rating">Top Rated</option>
+        </select>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {filteredAndSortedFoods.map((item) => (
+          <div
+            key={item.id}
+            className="group overflow-hidden rounded-2xl border border-slate-200 bg-white transition-all hover:shadow-lg hover:-translate-y-1"
+          >
+            <div className="relative h-40 overflow-hidden bg-slate-100">
+              <img
+                src={item.image}
+                alt={item.name}
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110"
+                onError={(e) => {
+                  e.target.src = `https://via.placeholder.com/400x200/f1f5f9/94a3b8?text=${encodeURIComponent(item.name)}`;
+                }}
+              />
+              <div className="absolute top-2 left-2 flex gap-2">
+                <Badge variant={item.eta <= 30 ? 'success' : 'warning'} size="sm">
+                  {item.eta} min
+                </Badge>
+              </div>
+              <div className="absolute top-2 right-2">
+                <Badge variant="default" size="sm">
+                  {item.distance} km
+                </Badge>
+              </div>
+            </div>
+
+            <div className="p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <h3 className="font-semibold text-slate-900">{item.name}</h3>
+                  <p className="mt-0.5 text-sm text-slate-500">{item.seller}</p>
+                </div>
+                <div className="flex items-center gap-1 text-sm">
+                  <svg className="h-4 w-4 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                  <span className="font-medium text-slate-700">{item.rating}</span>
+                </div>
+              </div>
+
+              <p className="mt-2 line-clamp-2 text-xs text-slate-400">{item.description}</p>
+
+              <div className="mt-4 flex items-center justify-between">
+                <span className="text-lg font-semibold text-slate-900">{formatPrice(item.price)}</span>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => onOrder(item)}
+                >
+                  Order Now
+                </Button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {filteredAndSortedFoods.length === 0 && (
+        <div className="py-12 text-center">
+          <svg className="mx-auto h-12 w-12 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p className="mt-4 text-sm text-slate-500">No foods match your current filters.</p>
+        </div>
+      )}
+    </Card>
+  );
+};
+
+export default NearbyFoods;
