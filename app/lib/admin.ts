@@ -1,5 +1,40 @@
-import { supabaseAdmin, getUserProfile, getUserDocuments } from './supabase';
+import { supabaseAdmin } from './supabase';
 import type { UserProfile, PendingApproval } from '@/app/types';
+
+// ──────────────────────────────────────────────
+// ALL admin functions use supabaseAdmin (service-role client)
+// This bypasses RLS entirely and avoids the infinite-recursion
+// bug in the profiles RLS policies.
+// ──────────────────────────────────────────────
+
+// Helper: fetch a single profile via admin client (bypasses RLS)
+async function getProfileAsAdmin(userId: string) {
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('*')
+    .eq('id', userId)
+    .single();
+
+  if (error) {
+    console.error('[Backend] Admin getProfile error:', error);
+    return null;
+  }
+  return data;
+}
+
+// Helper: fetch documents for a user via admin client (bypasses RLS)
+async function getDocumentsAsAdmin(userId: string) {
+  const { data, error } = await supabaseAdmin
+    .from('user_documents')
+    .select('*')
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('[Backend] Admin getDocuments error:', error);
+    return [];
+  }
+  return data || [];
+}
 
 // Get all pending sellers and delivery partners
 export async function getPendingApprovals() {
@@ -15,7 +50,7 @@ export async function getPendingApprovals() {
     // Fetch documents for each pending user
     const approvalsWithDocs = await Promise.all(
       (data || []).map(async (profile) => {
-        const documents = await getUserDocuments(profile.id);
+        const documents = await getDocumentsAsAdmin(profile.id);
         return {
           ...profile,
           documents,
@@ -25,7 +60,7 @@ export async function getPendingApprovals() {
 
     return approvalsWithDocs;
   } catch (error) {
-    console.error('[v0] Error fetching pending approvals:', error);
+    console.error('[Backend] Error fetching pending approvals:', error);
     throw error;
   }
 }
@@ -33,7 +68,7 @@ export async function getPendingApprovals() {
 // Approve a user (seller or delivery_partner)
 export async function approveUser(userId: string) {
   try {
-    const profile = await getUserProfile(userId);
+    const profile = await getProfileAsAdmin(userId);
     if (!profile) throw new Error('User not found');
 
     if (!['seller', 'delivery_partner'].includes(profile.role)) {
@@ -50,7 +85,7 @@ export async function approveUser(userId: string) {
     if (error) throw error;
     return data;
   } catch (error) {
-    console.error('[v0] Error approving user:', error);
+    console.error('[Backend] Error approving user:', error);
     throw error;
   }
 }
@@ -58,7 +93,7 @@ export async function approveUser(userId: string) {
 // Reject a user (seller or delivery_partner)
 export async function rejectUser(userId: string) {
   try {
-    const profile = await getUserProfile(userId);
+    const profile = await getProfileAsAdmin(userId);
     if (!profile) throw new Error('User not found');
 
     if (!['seller', 'delivery_partner'].includes(profile.role)) {
@@ -75,7 +110,7 @@ export async function rejectUser(userId: string) {
     if (error) throw error;
     return data;
   } catch (error) {
-    console.error('[v0] Error rejecting user:', error);
+    console.error('[Backend] Error rejecting user:', error);
     throw error;
   }
 }
@@ -91,7 +126,7 @@ export async function getAllUsers() {
     if (error) throw error;
     return data || [];
   } catch (error) {
-    console.error('[v0] Error fetching all users:', error);
+    console.error('[Backend] Error fetching all users:', error);
     throw error;
   }
 }
@@ -99,7 +134,6 @@ export async function getAllUsers() {
 // Create a customer manually (admin only)
 export async function createCustomerManually(email: string, fullName: string, phone: string) {
   try {
-    // Create auth user with temporary password
     const tempPassword = `Temp_${Math.random().toString(36).substring(7)}`;
 
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -111,7 +145,6 @@ export async function createCustomerManually(email: string, fullName: string, ph
     if (authError) throw authError;
     if (!authData.user) throw new Error('Failed to create auth user');
 
-    // Create customer profile (auto-approved)
     const { data: profileData, error: profileError } = await supabaseAdmin
       .from('profiles')
       .insert({
@@ -126,7 +159,6 @@ export async function createCustomerManually(email: string, fullName: string, ph
       .single();
 
     if (profileError) {
-      // Rollback - delete the auth user
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
       throw profileError;
     }
@@ -137,7 +169,7 @@ export async function createCustomerManually(email: string, fullName: string, ph
       tempPassword,
     };
   } catch (error) {
-    console.error('[v0] Error creating customer manually:', error);
+    console.error('[Backend] Error creating customer manually:', error);
     throw error;
   }
 }
@@ -145,14 +177,13 @@ export async function createCustomerManually(email: string, fullName: string, ph
 // Delete a customer (admin only)
 export async function deleteCustomer(userId: string) {
   try {
-    const profile = await getUserProfile(userId);
+    const profile = await getProfileAsAdmin(userId);
     if (!profile) throw new Error('User not found');
 
     if (profile.role !== 'customer') {
       throw new Error('Only customers can be deleted by admin');
     }
 
-    // Delete profile (which cascades to auth.users)
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .delete()
@@ -160,31 +191,30 @@ export async function deleteCustomer(userId: string) {
 
     if (profileError) throw profileError;
 
-    // Delete auth user
     const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId);
     if (authError) throw authError;
 
     return { success: true };
   } catch (error) {
-    console.error('[v0] Error deleting customer:', error);
+    console.error('[Backend] Error deleting customer:', error);
     throw error;
   }
 }
 
-// Get user with role and status check
+// Get user with documents (for admin review)
 export async function getUserForAdmin(userId: string) {
   try {
-    const profile = await getUserProfile(userId);
+    const profile = await getProfileAsAdmin(userId);
     if (!profile) throw new Error('User not found');
 
-    const documents = await getUserDocuments(userId);
+    const documents = await getDocumentsAsAdmin(userId);
 
     return {
       ...profile,
       documents,
     };
   } catch (error) {
-    console.error('[v0] Error fetching user for admin:', error);
+    console.error('[Backend] Error fetching user for admin:', error);
     throw error;
   }
 }

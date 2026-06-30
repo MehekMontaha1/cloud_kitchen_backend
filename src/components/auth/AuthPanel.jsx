@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Bike, ChefHat, LockKeyhole, Mail, ShieldCheck, ShoppingBag, Upload, UserRound } from 'lucide-react';
+import { Bike, ChefHat, LockKeyhole, Mail, ShieldCheck, ShoppingBag, Upload, UserRound, Phone } from 'lucide-react';
 import { Button, Input, Textarea } from '../common';
 import { supabase } from '../../../app/lib/supabase';
+import { registerUser, loginUser, logoutUser, uploadDocument } from '../../../app/lib/api-helpers';
 
 const roles = [
   {
@@ -32,12 +33,13 @@ const roles = [
 
 const AuthPanel = ({ onEnter }) => {
   const [mode, setMode] = useState('login');
+  const [file, setFile] = useState(null);
   const [form, setForm] = useState({
     name: '',
     email: '',
     password: '',
     role: 'customer',
-    document: '',
+    phone: '',
     address: '',
   });
 
@@ -47,43 +49,84 @@ const AuthPanel = ({ onEnter }) => {
     setForm((prev) => ({ ...prev, [field]: event.target.value }));
   };
 
+  const handleRoleChange = (roleValue) => {
+    setForm((prev) => ({ ...prev, role: roleValue }));
+    if (roleValue === 'admin') {
+      setMode('login');
+    }
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
     try {
       if (mode === 'login') {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: form.email,
-          password: form.password,
-        });
+        const result = await loginUser(form.email, form.password);
 
-        if (error) throw error;
+        if (result.profile.status === 'pending') {
+          alert('Your account is pending admin approval.');
+          return;
+        } else if (result.profile.status === 'rejected') {
+          alert('Your account verification request was rejected.');
+          return;
+        }
+
+        const mapDbRoleToFrontend = (dbRole) => {
+          if (dbRole === 'delivery_partner') return 'delivery';
+          if (dbRole === 'super_admin') return 'admin';
+          return dbRole;
+        };
 
         onEnter?.({
-          role: data.user.user_metadata.role || 'customer',
-          name: data.user.user_metadata.name || 'User',
-          email: data.user.email,
+          id: result.profile.id,
+          role: mapDbRoleToFrontend(result.profile.role) || 'customer',
+          name: result.profile.full_name || 'User',
+          email: result.user.email,
         });
       } else {
-        const { data, error } = await supabase.auth.signUp({
-          email: form.email,
-          password: form.password,
-          options: {
-            data: {
-              name: form.name,
-              role: form.role,
-              address: form.address,
-            },
-          },
-        });
+        if (form.role !== 'customer' && !file) {
+          alert('Please upload your ID / License Document');
+          return;
+        }
 
-        if (error) throw error;
+        const dbRole = form.role === 'delivery' ? 'delivery_partner' : form.role;
 
-        onEnter?.({
-          role: data.user.user_metadata.role || 'customer',
-          name: data.user.user_metadata.name || 'User',
-          email: data.user.email,
-        });
+        // 1. Call register backend API
+        await registerUser(
+          form.email,
+          form.password,
+          form.name,
+          form.phone,
+          dbRole
+        );
+
+        // 2. Programmatic login to perform upload
+        const loginResult = await loginUser(form.email, form.password);
+
+        // 3. Upload document if seller/delivery
+        if (form.role !== 'customer' && file) {
+          try {
+            await uploadDocument(file, 'license');
+          } catch (uploadErr) {
+            alert('Registration succeeded but document upload failed: ' + uploadErr.message);
+            await logoutUser();
+            setMode('login');
+            return;
+          }
+        }
+
+        if (form.role !== 'customer') {
+          alert('Registration successful. Awaiting admin approval.');
+          await logoutUser();
+          setMode('login');
+        } else {
+          onEnter?.({
+            id: loginResult.profile.id,
+            role: 'customer',
+            name: loginResult.profile.full_name || 'User',
+            email: loginResult.user.email,
+          });
+        }
       }
     } catch (error) {
       console.error('Authentication error:', error.message);
@@ -106,7 +149,7 @@ const AuthPanel = ({ onEnter }) => {
               <p className="text-xs text-slate-500">Food delivery platform</p>
             </div>
           </div>
-          <p className="hidden text-sm font-medium text-slate-500 sm:block">Frontend-only role access</p>
+          <p className="hidden text-sm font-medium text-slate-500 sm:block">Backend Connected Access</p>
         </div>
       </header>
 
@@ -118,7 +161,7 @@ const AuthPanel = ({ onEnter }) => {
               Login once and continue to the right panel.
             </h2>
             <p className="mt-5 max-w-2xl text-base leading-7 text-slate-600">
-              Choose whether you are a customer, seller, delivery partner, or super admin. This demo uses frontend state only.
+              Choose whether you are a customer, seller, delivery partner, or super admin. Authentication and permissions are managed by the database backend.
             </p>
           </div>
 
@@ -131,7 +174,7 @@ const AuthPanel = ({ onEnter }) => {
                 <button
                   key={role.value}
                   type="button"
-                  onClick={() => setForm((prev) => ({ ...prev, role: role.value }))}
+                  onClick={() => handleRoleChange(role.value)}
                   className={`rounded-xl border bg-white p-4 text-left transition-all ${
                     active
                       ? 'border-slate-900 shadow-soft ring-2 ring-slate-900/10'
@@ -162,13 +205,15 @@ const AuthPanel = ({ onEnter }) => {
             >
               Login
             </button>
-            <button
-              className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold ${mode === 'register' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
-              onClick={() => setMode('register')}
-              type="button"
-            >
-              Register
-            </button>
+            {form.role !== 'admin' && (
+              <button
+                className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold ${mode === 'register' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                onClick={() => setMode('register')}
+                type="button"
+              >
+                Register
+              </button>
+            )}
           </div>
 
           <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
@@ -179,13 +224,29 @@ const AuthPanel = ({ onEnter }) => {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {mode === 'register' && (
-              <Input label="Full Name" placeholder="Enter your name" value={form.name} onChange={update('name')} icon={<UserRound className="h-4 w-4" />} />
+              <Input label="Full Name" placeholder="Enter your name" value={form.name} onChange={update('name')} icon={<UserRound className="h-4 w-4" />} required />
             )}
-            <Input label="Email" type="email" placeholder="name@example.com" value={form.email} onChange={update('email')} icon={<Mail className="h-4 w-4" />} />
-            <Input label="Password" type="password" placeholder="Enter password" value={form.password} onChange={update('password')} icon={<LockKeyhole className="h-4 w-4" />} />
+            <Input label="Email" type="email" placeholder="name@example.com" value={form.email} onChange={update('email')} icon={<Mail className="h-4 w-4" />} required />
+            <Input label="Password" type="password" placeholder="Enter password" value={form.password} onChange={update('password')} icon={<LockKeyhole className="h-4 w-4" />} required />
+            {mode === 'register' && (
+              <Input label="Phone Number" type="tel" placeholder="+1234567890" value={form.phone} onChange={update('phone')} icon={<Phone className="h-4 w-4" />} required />
+            )}
 
             {mode === 'register' && form.role !== 'customer' && (
-              <Input label="ID / License Document" placeholder="license_1021.pdf" value={form.document} onChange={update('document')} icon={<Upload className="h-4 w-4" />} />
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium text-slate-700">
+                  ID / License Document (Required)
+                </label>
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg"
+                    onChange={(e) => setFile(e.target.files[0])}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 file:mr-4 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1 file:text-xs file:font-semibold hover:file:bg-slate-200"
+                    required
+                  />
+                </div>
+              </div>
             )}
             {mode === 'register' && (
               <Textarea label="Address" rows={3} placeholder="Business, delivery, or customer address" value={form.address} onChange={update('address')} />

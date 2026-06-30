@@ -68,6 +68,85 @@ function App() {
     return () => clearInterval(interval);
   }, []);
 
+  const mapDbRoleToFrontend = (dbRole) => {
+    if (dbRole === 'delivery_partner') return 'delivery';
+    if (dbRole === 'super_admin') return 'admin';
+    return dbRole;
+  };
+
+  useEffect(() => {
+    async function checkSession() {
+      try {
+        const res = await fetch('/api/auth/session');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && data.profile) {
+            setSession({
+              id: data.profile.id,
+              role: mapDbRoleToFrontend(data.profile.role),
+              name: data.profile.full_name || 'User',
+              email: data.user.email,
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching session:', err);
+      }
+    }
+    checkSession();
+  }, []);
+
+  const loadAdminData = async () => {
+    try {
+      const resApprovals = await fetch('/api/admin/pending-approvals');
+      if (resApprovals.ok) {
+        const data = await resApprovals.json();
+        if (data && data.success) {
+          const mappedSellers = data.data.map(user => {
+            const doc = user.documents && user.documents.length > 0 ? user.documents[0] : null;
+            return {
+              id: user.id,
+              name: user.full_name || 'No Name',
+              email: user.email,
+              doc: doc ? doc.document_url.substring(doc.document_url.lastIndexOf('/') + 1) : 'No Document',
+              docUrl: doc ? doc.document_url : null,
+              docType: doc ? (doc.document_type === 'license' ? 'Business License' : doc.document_type) : 'Business License',
+              status: user.status,
+              submittedAt: user.created_at ? new Date(user.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+            };
+          });
+          setSellers(mappedSellers);
+        }
+      }
+
+      const resUsers = await fetch('/api/admin/users');
+      if (resUsers.ok) {
+        const data = await resUsers.json();
+        if (data && data.success) {
+          const mappedCustomers = data.data
+            .filter(u => u.role === 'customer')
+            .map(user => ({
+              id: user.id,
+              name: user.full_name || 'No Name',
+              email: user.email,
+              city: 'Address: ' + (user.address || 'Unknown'),
+              status: user.status,
+              joinedAt: user.created_at ? new Date(user.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+            }));
+          setCustomers(mappedCustomers);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading admin data:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (session?.role === 'admin') {
+      loadAdminData();
+    }
+  }, [session]);
+
   const goTop = () => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   };
@@ -77,26 +156,57 @@ function App() {
     goTop();
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
     setSession(null);
     setCartItems([]);
     goTop();
   };
 
-  const handleSellerStatus = (id, status) => {
-    setSellers((prev) =>
-      prev.map((seller) =>
-        seller.id === id ? { ...seller, status } : seller
-      )
-    );
+  const handleSellerStatus = async (id, status) => {
+    try {
+      const endpoint = status === 'approved'
+        ? `/api/admin/users/${id}/approve`
+        : `/api/admin/users/${id}/reject`;
+      const res = await fetch(endpoint, { method: 'PUT' });
+      if (res.ok) {
+        setSellers((prev) =>
+          prev.map((seller) =>
+            seller.id === id ? { ...seller, status } : seller
+          )
+        );
+      } else {
+        const data = await res.json();
+        alert('Action failed: ' + (data.error || 'Unknown error'));
+      }
+    } catch (err) {
+      alert('Error updating status: ' + err.message);
+    }
   };
 
-  const handleCustomerStatus = (id, status) => {
-    setCustomers((prev) =>
-      prev.map((customer) =>
-        customer.id === id ? { ...customer, status } : customer
-      )
-    );
+  const handleCustomerStatus = async (id, status) => {
+    try {
+      const endpoint = status === 'approved'
+        ? `/api/admin/users/${id}/approve`
+        : `/api/admin/users/${id}/reject`;
+      const res = await fetch(endpoint, { method: 'PUT' });
+      if (res.ok) {
+        setCustomers((prev) =>
+          prev.map((customer) =>
+            customer.id === id ? { ...customer, status } : customer
+          )
+        );
+      } else {
+        const data = await res.json();
+        alert('Action failed: ' + (data.error || 'Unknown error'));
+      }
+    } catch (err) {
+      alert('Error updating status: ' + err.message);
+    }
   };
 
   const handleOrder = (item) => {

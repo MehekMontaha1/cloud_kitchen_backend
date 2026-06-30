@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/app/lib/auth';
-import { getUserDocuments, supabase, supabaseAdmin } from '@/app/lib/supabase';
+import { supabase, supabaseAdmin } from '@/app/lib/supabase';
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,18 +13,24 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const documents = await getUserDocuments(user.id);
+    // Use admin client to bypass RLS
+    const { data: documents, error } = await supabaseAdmin
+      .from('user_documents')
+      .select('*')
+      .eq('user_id', user.id);
+
+    if (error) throw error;
 
     return NextResponse.json(
       {
         success: true,
-        data: documents,
-        total: documents.length,
+        data: documents || [],
+        total: (documents || []).length,
       },
       { status: 200 }
     );
   } catch (error: any) {
-    console.error('[v0] Get documents route error:', error);
+    console.error('[Backend] Get documents route error:', error);
 
     return NextResponse.json(
       { error: error.message || 'Failed to fetch documents' },

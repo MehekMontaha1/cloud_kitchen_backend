@@ -1,11 +1,11 @@
 import { cookies } from 'next/headers';
-import { supabase, supabaseAdmin, getUserProfile, getDefaultStatusForRole } from './supabase';
+import { supabase, supabaseAdmin, getUserProfile, getUserProfileAsAdmin, getDefaultStatusForRole } from './supabase';
 import type { RegisterPayload, LoginPayload, AuthResponse } from '@/app/types';
 
 const AUTH_COOKIE_NAME = 'cloud-kitchen-auth';
 const AUTH_COOKIE_MAX_AGE = 7 * 24 * 60 * 60; // 7 days
 
-// Register a new user
+// Register a new user (production-grade: uses admin API, no trigger dependency)
 export async function registerUser(payload: RegisterPayload) {
   try {
     // Validate payload
@@ -17,24 +17,27 @@ export async function registerUser(payload: RegisterPayload) {
       throw new Error('Cannot register as super_admin');
     }
 
-    // Create auth user
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    const defaultStatus = getDefaultStatusForRole(payload.role);
+
+    // Step 1: Create auth user via admin API (bypasses triggers and email confirmation)
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: payload.email,
       password: payload.password,
+      email_confirm: true, // auto-confirm for this app
+      user_metadata: {
+        name: payload.full_name,
+        role: payload.role,
+        phone: payload.phone,
+      },
     });
 
     if (authError) throw authError;
     if (!authData.user) throw new Error('Failed to create auth user');
 
-    // Create profile with status based on role
-    const defaultStatus = getDefaultStatusForRole(payload.role);
-
-    // Prefer admin client for profile creation (bypass RLS); fall back to anon client
-    const dbClient: any = supabaseAdmin && supabaseAdmin.from ? supabaseAdmin : supabase;
-
-    const { data: profileData, error: profileError } = await dbClient
+    // Step 2: Create profile row using service-role client (bypasses RLS)
+    const { data: profileData, error: profileError } = await supabaseAdmin
       .from('profiles')
-      .insert({
+      .upsert({
         id: authData.user.id,
         email: payload.email,
         full_name: payload.full_name,
@@ -46,15 +49,12 @@ export async function registerUser(payload: RegisterPayload) {
       .single();
 
     if (profileError) {
-      // Rollback - delete the auth user (best-effort)
+      // Rollback: delete the auth user
+      console.error('[Backend] Profile creation failed, rolling back auth user:', profileError);
       try {
-        if (supabaseAdmin?.auth?.admin?.deleteUser) {
-          await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
-        } else {
-          console.warn('[v0] supabaseAdmin.deleteUser not available, skipping rollback');
-        }
+        await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
       } catch (rbError) {
-        console.error('[v0] Rollback deleteUser failed:', rbError);
+        console.error('[Backend] Rollback deleteUser failed:', rbError);
       }
       throw profileError;
     }
@@ -66,10 +66,12 @@ export async function registerUser(payload: RegisterPayload) {
         email: authData.user.email || '',
       },
       profile: profileData,
-      message: defaultStatus === 'pending' ? 'Registration successful. Awaiting admin approval.' : 'Registration successful!',
+      message: defaultStatus === 'pending'
+        ? 'Registration successful. Awaiting admin approval.'
+        : 'Registration successful!',
     };
   } catch (error) {
-    console.error('[v0] Register error:', error);
+    console.error('[Backend] Register error:', error);
     throw error;
   }
 }
@@ -86,9 +88,9 @@ export async function loginUser(payload: LoginPayload) {
     if (authError) throw authError;
     if (!authData.user || !authData.session) throw new Error('Failed to login');
 
-    // Get user profile
-    const profile = await getUserProfile(authData.user.id);
-    if (!profile) throw new Error('User profile not found');
+    // Get user profile (use admin client to bypass RLS for reliability)
+    const profile = await getUserProfileAsAdmin(authData.user.id);
+    if (!profile) throw new Error('User profile not found. Please contact support.');
 
     // Store JWT in secure httpOnly cookie
     const cookieStore = await cookies();
@@ -110,7 +112,7 @@ export async function loginUser(payload: LoginPayload) {
       token: authData.session.access_token,
     };
   } catch (error) {
-    console.error('[v0] Login error:', error);
+    console.error('[Backend] Login error:', error);
     throw error;
   }
 }
@@ -127,8 +129,8 @@ export async function getCurrentUser() {
     const { data, error } = await supabase.auth.getUser(token);
     if (error || !data.user) return null;
 
-    // Get profile
-    const profile = await getUserProfile(data.user.id);
+    // Get profile (use admin client for reliability)
+    const profile = await getUserProfileAsAdmin(data.user.id);
     if (!profile) return null;
 
     return {
@@ -137,7 +139,7 @@ export async function getCurrentUser() {
       profile,
     };
   } catch (error) {
-    console.error('[v0] Get current user error:', error);
+    console.error('[Backend] Get current user error:', error);
     return null;
   }
 }
@@ -149,7 +151,7 @@ export async function logoutUser() {
     cookieStore.delete(AUTH_COOKIE_NAME);
     return { success: true };
   } catch (error) {
-    console.error('[v0] Logout error:', error);
+    console.error('[Backend] Logout error:', error);
     throw error;
   }
 }
@@ -160,7 +162,7 @@ export async function getTokenFromCookie() {
     const cookieStore = await cookies();
     return cookieStore.get(AUTH_COOKIE_NAME)?.value || null;
   } catch (error) {
-    console.error('[v0] Get token error:', error);
+    console.error('[Backend] Get token error:', error);
     return null;
   }
 }

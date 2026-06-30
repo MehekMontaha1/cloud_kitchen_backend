@@ -1,8 +1,22 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-const supabaseServiceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || '';
+const getEnv = (key: string): string => {
+  if (typeof process !== 'undefined' && process.env) {
+    const val = process.env[key] || process.env[`VITE_${key}`] || process.env[`NEXT_PUBLIC_${key}`];
+    if (val) return val;
+  }
+  try {
+    const metaEnv = (import.meta as any).env;
+    if (metaEnv) {
+      return metaEnv[key] || metaEnv[`VITE_${key}`] || metaEnv[`NEXT_PUBLIC_${key}`] || '';
+    }
+  } catch {}
+  return '';
+};
+
+const supabaseUrl = getEnv('SUPABASE_URL');
+const supabaseAnonKey = getEnv('SUPABASE_ANON_KEY');
+const supabaseServiceRoleKey = getEnv('SUPABASE_SERVICE_ROLE_KEY');
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');

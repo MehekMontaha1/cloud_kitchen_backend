@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
     console.error('[v0] Register route error:', error);
 
     // Handle specific Supabase errors
-    if (error.message?.includes('duplicate')) {
+    if (error.message?.includes('duplicate') || error.message?.includes('already been registered') || error.message?.includes('already exists')) {
       return NextResponse.json(
         { error: 'Email already registered' },
         { status: 409 }

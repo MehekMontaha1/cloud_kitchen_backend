@@ -35,82 +35,31 @@ ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_documents ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies for profiles table
+-- NOTE: Admin operations use service-role key (supabaseAdmin) which bypasses RLS.
+-- Only user-facing policies are needed here.
 
--- Policy 1: Users can view their own profile
+-- Users can view their own profile
 CREATE POLICY "Users can view their own profile" ON profiles
   FOR SELECT USING (auth.uid() = id);
 
--- Policy 2: Super admin can view all profiles
-CREATE POLICY "Super admin can view all profiles" ON profiles
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'super_admin'
-    )
-  );
-
--- Policy 3: Users can update their own profile (limited fields)
+-- Users can update their own profile
 CREATE POLICY "Users can update their own profile" ON profiles
   FOR UPDATE USING (auth.uid() = id)
-  WITH CHECK (auth.uid() = id AND role = (SELECT role FROM profiles WHERE id = auth.uid()));
+  WITH CHECK (auth.uid() = id);
 
--- Policy 4: Super admin can update any profile (including status)
-CREATE POLICY "Super admin can update any profile" ON profiles
-  FOR UPDATE USING (
-    EXISTS (
-      SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'super_admin'
-    )
-  )
-  WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'super_admin'
-    )
-  );
-
--- Policy 5: Super admin can insert profiles (for manual customer creation)
-CREATE POLICY "Super admin can insert profiles" ON profiles
-  FOR INSERT WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'super_admin'
-    )
-  );
-
--- Policy 6: Super admin can delete profiles (for customer deletion)
-CREATE POLICY "Super admin can delete profiles" ON profiles
-  FOR DELETE USING (
-    EXISTS (
-      SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'super_admin'
-    )
-  );
+-- Users can insert their own profile (needed during registration)
+CREATE POLICY "Users can insert their own profile" ON profiles
+  FOR INSERT WITH CHECK (auth.uid() = id);
 
 -- RLS Policies for user_documents table
 
--- Policy 1: Users can view their own documents
+-- Users can view their own documents
 CREATE POLICY "Users can view their own documents" ON user_documents
-  FOR SELECT USING (
-    user_id = (SELECT id FROM profiles WHERE id = auth.uid())
-  );
+  FOR SELECT USING (user_id = auth.uid());
 
--- Policy 2: Super admin can view all documents
-CREATE POLICY "Super admin can view all documents" ON user_documents
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'super_admin'
-    )
-  );
-
--- Policy 3: Users can insert their own documents
+-- Users can insert their own documents
 CREATE POLICY "Users can insert their own documents" ON user_documents
-  FOR INSERT WITH CHECK (
-    user_id = (SELECT id FROM profiles WHERE id = auth.uid())
-  );
-
--- Policy 4: Super admin can insert documents for any user
-CREATE POLICY "Super admin can insert documents for any user" ON user_documents
-  FOR INSERT WITH CHECK (
-    EXISTS (
-      SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'super_admin'
-    )
-  );
+  FOR INSERT WITH CHECK (user_id = auth.uid());
 
 -- Create function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -126,3 +75,7 @@ CREATE TRIGGER update_profiles_updated_at
 BEFORE UPDATE ON profiles
 FOR EACH ROW
 EXECUTE FUNCTION update_updated_at_column();
+
+-- NOTE: Profile creation is handled by the backend API (app/lib/auth.ts)
+-- using supabaseAdmin.auth.admin.createUser() + supabaseAdmin.from('profiles').upsert()
+-- Do NOT add triggers on auth.users.
