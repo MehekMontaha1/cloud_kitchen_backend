@@ -174,14 +174,14 @@ export async function createCustomerManually(email: string, fullName: string, ph
   }
 }
 
-// Delete a customer (admin only)
+// Delete a user (admin only - can delete seller, customer, or delivery_partner)
 export async function deleteCustomer(userId: string) {
   try {
     const profile = await getProfileAsAdmin(userId);
     if (!profile) throw new Error('User not found');
 
-    if (profile.role !== 'customer') {
-      throw new Error('Only customers can be deleted by admin');
+    if (profile.role === 'super_admin') {
+      throw new Error('Super admin cannot be deleted');
     }
 
     const { error: profileError } = await supabaseAdmin
@@ -196,7 +196,7 @@ export async function deleteCustomer(userId: string) {
 
     return { success: true };
   } catch (error) {
-    console.error('[Backend] Error deleting customer:', error);
+    console.error('[Backend] Error deleting user:', error);
     throw error;
   }
 }
@@ -215,6 +215,43 @@ export async function getUserForAdmin(userId: string) {
     };
   } catch (error) {
     console.error('[Backend] Error fetching user for admin:', error);
+    throw error;
+  }
+}
+
+// Get all reports submitted by users (admin only)
+export async function getAllReports() {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('reports')
+      .select(`
+        *,
+        reporter:profiles!reports_reporter_id_fkey(full_name, email, role)
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('[Backend] Error fetching reports:', error);
+    throw error;
+  }
+}
+
+// Update report status (admin only)
+export async function updateReportStatus(reportId: string, status: 'open' | 'investigating' | 'resolved') {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('reports')
+      .update({ status })
+      .eq('id', reportId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('[Backend] Error updating report status:', error);
     throw error;
   }
 }

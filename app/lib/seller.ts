@@ -81,7 +81,7 @@ export async function getSellerOrders(sellerId: string) {
       .from('orders')
       .select(`
         *,
-        customer:profiles!orders_customer_id_fkey(full_name, email)
+        customer:profiles!customer_id(full_name, email)
       `)
       .eq('seller_id', sellerId)
       .order('created_at', { ascending: false });

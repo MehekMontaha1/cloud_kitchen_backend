@@ -45,9 +45,9 @@ const SellerVerification = ({ sellers, onStatusChange }) => {
     <Card>
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-semibold text-slate-900">Seller Verification</h2>
+          <h2 className="text-xl font-semibold text-slate-900">Partner Verification</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Review seller documents and licenses. {pendingCount > 0 && (
+            Review documents and licenses for sellers and delivery partners. {pendingCount > 0 && (
               <span className="text-amber-600">{pendingCount} pending review{pendingCount > 1 ? 's' : ''}</span>
             )}
           </p>
@@ -132,7 +132,7 @@ const SellerVerification = ({ sellers, onStatusChange }) => {
       <Modal
         isOpen={showModal}
         onClose={() => setShowModal(false)}
-        title="Seller Details"
+        title="Partner Details"
         size="lg"
       >
         {selectedSeller && (

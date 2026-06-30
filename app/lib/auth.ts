@@ -92,6 +92,15 @@ export async function loginUser(payload: LoginPayload) {
     const profile = await getUserProfileAsAdmin(authData.user.id);
     if (!profile) throw new Error('User profile not found. Please contact support.');
 
+    // For sellers and delivery partners, verify they are approved by the admin
+    if ((profile.role === 'seller' || profile.role === 'delivery_partner') && profile.status !== 'approved') {
+      await supabase.auth.signOut();
+      if (profile.status === 'rejected') {
+        throw new Error('Your registration has been rejected by the administrator.');
+      }
+      throw new Error('Your registration is pending approval by the administrator.');
+    }
+
     // Store JWT in secure httpOnly cookie
     const cookieStore = await cookies();
     cookieStore.set(AUTH_COOKIE_NAME, authData.session.access_token, {

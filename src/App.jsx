@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { LogOut, ShoppingCart as CartIcon } from 'lucide-react';
+import { LogOut, ShoppingCart as CartIcon, User as UserIcon } from 'lucide-react';
 import { Badge, Button } from './components/common';
 import AuthPanel from './components/auth/AuthPanel';
+import ProfilePanel from './components/profile/ProfilePanel';
 import {
   SellerVerification,
-  CustomerVerification,
+  UserManagement,
   AnalyticsDashboard,
-  SystemControls,
-  MessageMonitoring,
+  ReportsSection,
 } from './components/admin';
 import {
   NearbyFoods,
@@ -40,9 +40,10 @@ const roleLabels = {
 
 function App() {
   const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [currentView, setCurrentView] = useState('dashboard');
   const [sellers, setSellers] = useState(sellersData);
   const [customers, setCustomers] = useState(customersData);
-  const [systemPaused, setSystemPaused] = useState(false);
   const [messages, setMessages] = useState(messagesData);
   const [showNearbyOnly, setShowNearbyOnly] = useState(true);
   const [cartItems, setCartItems] = useState([]);
@@ -91,6 +92,8 @@ function App() {
         }
       } catch (err) {
         console.error('Error fetching session:', err);
+      } finally {
+        setAuthLoading(false);
       }
     }
     checkSession();
@@ -110,7 +113,7 @@ function App() {
               email: user.email,
               doc: doc ? doc.document_url.substring(doc.document_url.lastIndexOf('/') + 1) : 'No Document',
               docUrl: doc ? doc.document_url : null,
-              docType: doc ? (doc.document_type === 'license' ? 'Business License' : doc.document_type) : 'Business License',
+              docType: doc ? (doc.document_type === 'license' ? 'Business License' : doc.document_type) : (user.role === 'delivery_partner' ? 'Delivery License' : 'Business License'),
               status: user.status,
               submittedAt: user.created_at ? new Date(user.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
             };
@@ -123,17 +126,15 @@ function App() {
       if (resUsers.ok) {
         const data = await resUsers.json();
         if (data && data.success) {
-          const mappedCustomers = data.data
-            .filter(u => u.role === 'customer')
-            .map(user => ({
-              id: user.id,
-              name: user.full_name || 'No Name',
-              email: user.email,
-              city: 'Address: ' + (user.address || 'Unknown'),
-              status: user.status,
-              joinedAt: user.created_at ? new Date(user.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
-            }));
-          setCustomers(mappedCustomers);
+          const mappedUsers = data.data.map(user => ({
+            id: user.id,
+            name: user.full_name || 'No Name',
+            email: user.email,
+            role: user.role,
+            status: user.status || 'approved',
+            joinedAt: user.created_at ? new Date(user.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+          }));
+          setCustomers(mappedUsers);
         }
       }
     } catch (err) {
@@ -188,24 +189,18 @@ function App() {
     }
   };
 
-  const handleCustomerStatus = async (id, status) => {
+  const handleDeleteUser = async (id) => {
     try {
-      const endpoint = status === 'approved'
-        ? `/api/admin/users/${id}/approve`
-        : `/api/admin/users/${id}/reject`;
-      const res = await fetch(endpoint, { method: 'PUT' });
+      const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
       if (res.ok) {
-        setCustomers((prev) =>
-          prev.map((customer) =>
-            customer.id === id ? { ...customer, status } : customer
-          )
-        );
+        setCustomers((prev) => prev.filter((user) => user.id !== id));
+        setSellers((prev) => prev.filter((seller) => seller.id !== id));
       } else {
         const data = await res.json();
-        alert('Action failed: ' + (data.error || 'Unknown error'));
+        alert('Delete failed: ' + (data.error || 'Unknown error'));
       }
     } catch (err) {
-      alert('Error updating status: ' + err.message);
+      alert('Error deleting user: ' + err.message);
     }
   };
 
@@ -300,11 +295,8 @@ function App() {
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl font-semibold text-slate-900">Super Admin Dashboard</h2>
-            <p className="mt-1 text-slate-500">Seller verification, customer verification, analytics, platform controls, and message monitoring.</p>
+            <p className="mt-1 text-slate-500">Partner verification, user management, analytics, and user reports.</p>
           </div>
-          <Badge variant={systemPaused ? 'danger' : 'success'} size="lg" dot>
-            {systemPaused ? 'System Paused' : 'System Active'}
-          </Badge>
         </div>
       </section>
 
@@ -312,25 +304,30 @@ function App() {
 
       <section className="grid gap-8 lg:grid-cols-2">
         <SellerVerification sellers={sellers} onStatusChange={handleSellerStatus} />
-        <CustomerVerification customers={customers} onAction={handleCustomerStatus} />
+        <UserManagement users={customers} onDelete={handleDeleteUser} />
       </section>
 
-      <SystemControls paused={systemPaused} onToggle={() => setSystemPaused((prev) => !prev)} />
-
-      <MessageMonitoring
-        messages={messages}
-        onFlag={handleFlagMessage}
-        onDelete={handleDeleteMessage}
-      />
+      <ReportsSection />
     </div>
   );
 
   const renderPanel = () => {
+    if (currentView === 'profile') {
+      return <ProfilePanel session={session} onUpdate={(updated) => setSession(prev => ({ ...prev, name: updated.full_name }))} />;
+    }
     if (session?.role === 'seller') return <SellerPanel />;
     if (session?.role === 'delivery') return <DeliveryPanel />;
     if (session?.role === 'admin') return renderAdminPanel();
     return renderCustomerPanel();
   };
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-orange-500 border-t-transparent"></div>
+      </div>
+    );
+  }
 
   if (!session) {
     return <AuthPanel onEnter={handleLogin} />;
@@ -365,10 +362,22 @@ function App() {
                   )}
                 </Button>
               )}
-              <div className="hidden text-right sm:block">
+              <div 
+                className="hidden text-right sm:block cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={() => setCurrentView(currentView === 'profile' ? 'dashboard' : 'profile')}
+              >
                 <p className="text-sm font-semibold text-slate-900">{session.name || 'Demo User'}</p>
                 <p className="text-xs text-slate-500">{session.email || roleLabels[session.role]}</p>
               </div>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="rounded-lg" 
+                onClick={() => setCurrentView(currentView === 'profile' ? 'dashboard' : 'profile')}
+              >
+                <UserIcon className="h-4 w-4" />
+                {currentView === 'profile' ? 'Dashboard' : 'Profile'}
+              </Button>
               <Button variant="ghost" size="sm" className="rounded-lg" onClick={handleLogout}>
                 <LogOut className="h-4 w-4" />
                 Logout
