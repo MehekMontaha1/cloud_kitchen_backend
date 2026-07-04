@@ -17,7 +17,10 @@ import {
   OffersFlashDeals,
   InboxMessaging,
   SupportChatbot,
+  OrderTracking,
 } from './components/customer';
+import GeminiFoodAssistant from './components/customer/GeminiFoodAssistant';
+
 import SellerPanel from './components/seller/SellerPanel';
 import DeliveryPanel from './components/delivery/DeliveryPanel';
 import {
@@ -49,13 +52,76 @@ function App() {
   const [cartItems, setCartItems] = useState([]);
   const [withinRadius, setWithinRadius] = useState(true);
   const [promoCode, setPromoCode] = useState('');
-  const [chatMessages, setChatMessages] = useState(chatMessagesData);
-  const [flashDeals, setFlashDeals] = useState(flashDealsData);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [flashDeals, setFlashDeals] = useState([]);
+  const [realFoods, setRealFoods] = useState([]);
+  const [activeAiFoodItem, setActiveAiFoodItem] = useState(null);
+  const [customerLocation, setCustomerLocation] = useState({
+    lat: 23.8103,
+    lng: 90.4125,
+    address: 'Dhaka, Bangladesh',
+  });
+
+  const loadCustomerData = async () => {
+    try {
+      // 1. Load Profile to set saved location
+      const profileRes = await fetch('/api/users/profile');
+      if (profileRes.ok) {
+        const profileData = await profileRes.json();
+        if (profileData.success && profileData.data) {
+          const p = profileData.data;
+          if (p.latitude && p.longitude) {
+            setCustomerLocation({
+              lat: Number(p.latitude),
+              lng: Number(p.longitude),
+              address: p.location || 'Dhaka, Bangladesh',
+            });
+          }
+        }
+      }
+
+      // 2. Load Foods from backend API
+      const foodsRes = await fetch(`/api/customer/foods?lat=${customerLocation.lat}&lng=${customerLocation.lng}`);
+      if (foodsRes.ok) {
+        const foodsDataResult = await foodsRes.json();
+        if (foodsDataResult.success) {
+          setRealFoods(foodsDataResult.data || []);
+        }
+      }
+
+      // 3. Load Flash Deals from backend API
+      const dealsRes = await fetch('/api/customer/flash-deals');
+      if (dealsRes.ok) {
+        const dealsDataResult = await dealsRes.json();
+        if (dealsDataResult.success) {
+          setFlashDeals(dealsDataResult.data || []);
+        }
+      }
+
+      // 4. Load Customer Messages from backend API
+      const msgRes = await fetch('/api/customer/messages');
+      if (msgRes.ok) {
+        const msgDataResult = await msgRes.json();
+        if (msgDataResult.success) {
+          setChatMessages(msgDataResult.data || []);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading customer backend data:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (session?.role === 'customer') {
+      loadCustomerData();
+    }
+  }, [session, customerLocation.lat, customerLocation.lng]);
 
   const visibleFoods = useMemo(() => {
-    if (!showNearbyOnly) return foodsData;
-    return foodsData.filter((food) => food.eta <= 30);
-  }, [showNearbyOnly]);
+    return realFoods;
+  }, [realFoods]);
+
+
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -228,23 +294,73 @@ function App() {
     setMessages((prev) => prev.filter((message) => message.id !== id));
   };
 
-  const handleCheckout = () => {
-    alert('Order placed successfully!');
-    setCartItems([]);
+  const [activeTrackingOrderId, setActiveTrackingOrderId] = useState(null);
+
+  const handleCheckout = async () => {
+    if (cartItems.length === 0) return;
+    const firstItem = cartItems[0];
+    const totalVal = cartItems.reduce((sum, item) => sum + item.price, 0) + 2.99;
+
+    try {
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          seller_id: firstItem.sellerId || session?.id,
+          item_name: cartItems.map(i => i.name).join(', '),
+          value: totalVal,
+          delivery_address: customerLocation.address || 'Dhaka, Bangladesh',
+          delivery_latitude: customerLocation.lat,
+          delivery_longitude: customerLocation.lng,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const newOrderId = data.data?.id || 'ORD-' + Math.floor(1000 + Math.random() * 9000);
+        setCartItems([]);
+        setActiveTrackingOrderId(newOrderId);
+      } else {
+        // Fallback to tracking UI on demo
+        const demoId = 'ORD-' + Math.floor(1000 + Math.random() * 9000);
+        setCartItems([]);
+        setActiveTrackingOrderId(demoId);
+      }
+    } catch (err) {
+      console.error('Error placing order:', err);
+      const demoId = 'ORD-' + Math.floor(1000 + Math.random() * 9000);
+      setCartItems([]);
+      setActiveTrackingOrderId(demoId);
+    }
   };
 
-  const handleSendChat = (text) => {
-    setChatMessages((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        from: 'customer',
-        sender: 'You',
-        text,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      },
-    ]);
+
+  const handleSendChat = async (text) => {
+    try {
+      const res = await fetch('/api/customer/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: data.data?.id || Date.now(),
+            from: 'customer',
+            sender: 'You',
+            text,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ]);
+      }
+    } catch (err) {
+      console.error('Error sending message:', err);
+    }
   };
+
 
   const renderCustomerPanel = () => (
     <div className="space-y-8">
@@ -258,12 +374,34 @@ function App() {
         </Badge>
       </section>
 
+      {/* Active Live Order Tracking Banner / Modal */}
+      {activeTrackingOrderId && (
+        <OrderTracking
+          orderId={activeTrackingOrderId}
+          onClose={() => setActiveTrackingOrderId(null)}
+        />
+      )}
+
       <NearbyFoods
         foods={visibleFoods}
         showNearbyOnly={showNearbyOnly}
+        userLocation={customerLocation}
         onToggle={() => setShowNearbyOnly((prev) => !prev)}
         onOrder={handleOrder}
+        onAskAI={(item) => {
+          setActiveAiFoodItem(item);
+          const el = document.getElementById('gemini-food-assistant-section');
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }}
       />
+
+      {/* Gemini AI Food & Health Assistant Section */}
+      <div id="gemini-food-assistant-section">
+        <GeminiFoodAssistant
+          activeFoodItem={activeAiFoodItem}
+          onClearActiveFood={() => setActiveAiFoodItem(null)}
+        />
+      </div>
 
       <section className="grid gap-8 lg:grid-cols-2">
         <CustomOrders onSubmit={() => {}} />
@@ -274,7 +412,12 @@ function App() {
         />
       </section>
 
-      <GeolocationValidation withinRadius={withinRadius} onToggleRadius={() => setWithinRadius((prev) => !prev)} />
+      <GeolocationValidation
+        withinRadius={withinRadius}
+        onToggleRadius={() => setWithinRadius((prev) => !prev)}
+        onLocationChange={setCustomerLocation}
+        customerLocation={customerLocation}
+      />
 
       <OffersFlashDeals
         deals={flashDeals}
@@ -283,7 +426,7 @@ function App() {
       />
 
       <section className="grid gap-8 lg:grid-cols-2">
-        <InboxMessaging messages={chatMessages} onSend={handleSendChat} />
+        <InboxMessaging userRole="customer" />
         <SupportChatbot />
       </section>
     </div>

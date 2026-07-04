@@ -13,9 +13,13 @@ CREATE TABLE IF NOT EXISTS public.menu_items (
   stock INTEGER NOT NULL DEFAULT 50 CHECK (stock >= 0),
   status TEXT NOT NULL DEFAULT 'live' CHECK (status IN ('live', 'paused')),
   image_url TEXT,
+  description TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Ensure description column exists if menu_items table already exists
+ALTER TABLE public.menu_items ADD COLUMN IF NOT EXISTS description TEXT;
 
 -- Enable RLS
 ALTER TABLE public.menu_items ENABLE ROW LEVEL SECURITY;
@@ -40,11 +44,15 @@ CREATE TABLE IF NOT EXISTS public.orders (
   item_name TEXT NOT NULL,
   type TEXT NOT NULL DEFAULT 'Regular' CHECK (type IN ('Regular', 'Custom')),
   eta TEXT NOT NULL DEFAULT '20 min',
-  status TEXT NOT NULL DEFAULT 'Preparing' CHECK (status IN ('Pending', 'Preparing', 'Ready', 'Quoted', 'Delivered', 'Cancelled')),
+  status TEXT NOT NULL DEFAULT 'Pending' CHECK (status IN ('Pending', 'Preparing', 'Ready', 'Quoted', 'Accepted', 'Picked Up', 'Delivered', 'Cancelled')),
   value NUMERIC(10, 2) NOT NULL CHECK (value >= 0),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Ensure orders status check constraint includes all delivery statuses if table already exists
+ALTER TABLE public.orders DROP CONSTRAINT IF EXISTS orders_status_check;
+ALTER TABLE public.orders ADD CONSTRAINT orders_status_check CHECK (status IN ('Pending', 'Preparing', 'Ready', 'Quoted', 'Accepted', 'Picked Up', 'Delivered', 'Cancelled'));
 
 -- Enable RLS
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;

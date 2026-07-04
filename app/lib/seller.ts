@@ -18,7 +18,7 @@ export async function getSellerMenu(sellerId: string) {
 }
 
 // 2. Add a new menu item
-export async function addMenuItem(sellerId: string, payload: { name: string; category?: string; price: number; stock: number; image_url?: string }) {
+export async function addMenuItem(sellerId: string, payload: { name: string; category?: string; price: number; stock: number; image_url?: string; description?: string }) {
   try {
     const { data, error } = await supabaseAdmin
       .from('menu_items')
@@ -30,6 +30,7 @@ export async function addMenuItem(sellerId: string, payload: { name: string; cat
         stock: payload.stock,
         status: 'live',
         image_url: payload.image_url,
+        description: payload.description,
       })
       .select()
       .single();
@@ -212,3 +213,53 @@ export async function deleteMenuItem(sellerId: string, itemId: string) {
     throw error;
   }
 }
+
+// 9. Update order status by seller (Pending -> Preparing, Preparing -> Ready, Cancelled)
+export async function updateSellerOrderStatus(sellerId: string, orderId: string, status: string) {
+  try {
+    const allowedStatuses = ['Pending', 'Preparing', 'Ready', 'Cancelled'];
+    if (!allowedStatuses.includes(status)) {
+      throw new Error(`Invalid status transition to '${status}' by seller.`);
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('orders')
+      .update({
+        status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', orderId)
+      .eq('seller_id', sellerId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('[Seller Service] Error updating order status:', error);
+    throw error;
+  }
+}
+
+// 10. Send seller message
+export async function sendSellerMessage(sellerId: string, receiverId: string, text: string) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('messages')
+      .insert({
+        sender_id: sellerId,
+        receiver_id: receiverId,
+        text,
+        unread: true,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('[Seller Service] Error sending message:', error);
+    throw error;
+  }
+}
+

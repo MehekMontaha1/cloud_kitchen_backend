@@ -1,44 +1,39 @@
 {
   "pages": {
-    "/api/auth/session/route": [
+    "/api/auth/login/route": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/api/auth/session/route.js"
+      "static/chunks/app/api/auth/login/route.js"
     ],
-    "/api/seller/menu/route": [
+    "/api/chats/route": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/api/seller/menu/route.js"
-    ],
-    "/api/seller/orders/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/seller/orders/route.js"
-    ],
-    "/api/seller/messages/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/seller/messages/route.js"
-    ],
-    "/api/seller/earnings/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/seller/earnings/route.js"
+      "static/chunks/app/api/chats/route.js"
     ],
     "/api/users/profile/route": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/api/users/profile/route.js"
     ],
+    "/api/customer/foods/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/customer/foods/route.js"
+    ],
+    "/api/customer/flash-deals/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/customer/flash-deals/route.js"
+    ],
+    "/api/customer/messages/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/customer/messages/route.js"
+    ],
     "/api/auth/logout/route": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/api/auth/logout/route.js"
-    ],
-    "/api/auth/login/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/auth/login/route.js"
     ],
     "/api/delivery/available/route": [
       "static/chunks/webpack.js",
@@ -55,30 +50,10 @@
       "static/chunks/main-app.js",
       "static/chunks/app/api/delivery/messages/route.js"
     ],
-    "/api/users/reports/route": [
+    "/api/delivery/status/route": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/api/users/reports/route.js"
-    ],
-    "/api/admin/pending-approvals/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/admin/pending-approvals/route.js"
-    ],
-    "/api/admin/users/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/admin/users/route.js"
-    ],
-    "/api/admin/analytics/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/admin/analytics/route.js"
-    ],
-    "/api/admin/reports/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/admin/reports/route.js"
+      "static/chunks/app/api/delivery/status/route.js"
     ]
   }
 }

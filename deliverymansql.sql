@@ -15,9 +15,14 @@ CREATE INDEX IF NOT EXISTS idx_orders_delivery_partner_id ON public.orders(deliv
 -- 4. Enable RLS and setup policies for orders
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 
+-- Fix order status check constraint to support Accepted and Picked Up delivery statuses
+ALTER TABLE public.orders DROP CONSTRAINT IF EXISTS orders_status_check;
+ALTER TABLE public.orders ADD CONSTRAINT orders_status_check CHECK (status IN ('Pending', 'Preparing', 'Ready', 'Quoted', 'Accepted', 'Picked Up', 'Delivered', 'Cancelled'));
+
 DROP POLICY IF EXISTS "Delivery partners can manage orders they accepted" ON public.orders;
 DROP POLICY IF EXISTS "Delivery partners can view available orders" ON public.orders;
 
 -- Riders can view and update orders they have accepted
 CREATE POLICY "Delivery partners can manage orders they accepted" ON public.orders
   FOR ALL USING (auth.uid() = delivery_partner_id);
+

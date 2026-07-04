@@ -1,77 +1,87 @@
 import { useState, useEffect } from 'react';
-import { Card, Button, Badge } from '../common';
+import { Card, Button, Badge, MapPicker } from '../common';
 
-const GeolocationValidation = ({ withinRadius, onToggleRadius }) => {
-  const [location, setLocation] = useState(null);
-  const [loading, setLoading] = useState(true);
+const GeolocationValidation = ({ withinRadius, onToggleRadius, onLocationChange, customerLocation }) => {
+  const [selectedLocation, setSelectedLocation] = useState({
+    lat: customerLocation?.lat || 23.8103,
+    lng: customerLocation?.lng || 90.4125,
+    address: customerLocation?.address || 'Dhaka, Bangladesh',
+  });
 
   useEffect(() => {
-    const simulateLocation = () => {
-      setTimeout(() => {
-        setLocation({
-          latitude: 37.7749 + (Math.random() - 0.5) * 0.1,
-          longitude: -122.4194 + (Math.random() - 0.5) * 0.1,
-          address: '123 Market Street, San Francisco, CA',
-          zone: withinRadius ? 'Downtown' : 'Outer District',
-        });
-        setLoading(false);
-      }, 1000);
-    };
+    if (customerLocation?.lat && customerLocation?.lng) {
+      setSelectedLocation(customerLocation);
+    }
+  }, [customerLocation?.lat, customerLocation?.lng, customerLocation?.address]);
 
-    simulateLocation();
-  }, [withinRadius]);
-
-  if (loading) {
-    return (
-      <Card>
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold text-slate-900">Geolocation Validation</h2>
-          <p className="mt-1 text-sm text-slate-500">Verifying your location for delivery radius...</p>
-        </div>
-        <div className="flex items-center justify-center py-8">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-slate-900" />
-        </div>
-      </Card>
-    );
-  }
+  const handleLocationPick = (loc) => {
+    setSelectedLocation(loc);
+    if (onLocationChange) {
+      onLocationChange(loc);
+    }
+  };
 
   return (
     <Card>
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold text-slate-900">Geolocation Validation</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Location-based filtering ensures realistic delivery times.
-        </p>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-semibold text-slate-900">Live Customer Location & Delivery Radius</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Pick any location in Bangladesh to view nearby restaurants within your 30-minute delivery zone.
+          </p>
+        </div>
+        <Button variant="secondary" size="sm" onClick={onToggleRadius}>
+          Toggle Sample Distance ({withinRadius ? 'Within 30-min' : 'Outside 30-min'})
+        </Button>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <div className="space-y-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-medium text-slate-900">Your Location</h3>
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Real OpenStreetMap View with Save Button */}
+        <div className="space-y-3">
+          <MapPicker
+            initialLat={selectedLocation.lat}
+            initialLng={selectedLocation.lng}
+            radiusMeters={7000} // 7km ~ 30 minute delivery radius
+            circleColor="#10b981" // Green circle for Customer Delivery Zone
+            showSaveButton={true}
+            onLocationChange={handleLocationPick}
+            height="340px"
+          />
+        </div>
+
+        {/* Location Info & Radius Status */}
+        <div className="space-y-4 flex flex-col justify-between">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="font-semibold text-slate-900">Delivery Eligibility</h3>
               <Badge variant={withinRadius ? 'success' : 'warning'} size="md" dot>
-                {withinRadius ? 'Within Radius' : 'Outside Radius'}
+                {withinRadius ? '30-Min Serviceable' : 'Extended Zone'}
               </Badge>
             </div>
-            
+
             <div className="space-y-2 text-sm">
-              <div className="flex items-center gap-2 text-slate-600">
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-                {location?.address}
+              <div>
+                <span className="text-xs text-slate-400 font-medium uppercase tracking-wider">Selected Address</span>
+                <p className="text-slate-800 font-medium mt-0.5">{selectedLocation.address || 'Dhaka, Bangladesh'}</p>
               </div>
-              <div className="flex items-center gap-2 text-slate-600">
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                </svg>
-                Zone: {location?.zone}
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-xs">
+                <div>
+                  <span className="text-slate-400">Latitude</span>
+                  <p className="font-mono text-slate-700">{selectedLocation.lat.toFixed(5)}</p>
+                </div>
+                <div>
+                  <span className="text-slate-400">Longitude</span>
+                  <p className="font-mono text-slate-700">{selectedLocation.lng.toFixed(5)}</p>
+                </div>
               </div>
             </div>
           </div>
 
-          <div className={`rounded-xl p-4 ${withinRadius ? 'bg-emerald-50 border border-emerald-200' : 'bg-amber-50 border border-amber-200'}`}>
+          <div
+            className={`rounded-xl p-4 border ${
+              withinRadius ? 'bg-emerald-50 border-emerald-200' : 'bg-amber-50 border-amber-200'
+            }`}
+          >
             <div className="flex items-start gap-3">
               <div className={`rounded-full p-2 ${withinRadius ? 'bg-emerald-100' : 'bg-amber-100'}`}>
                 {withinRadius ? (
@@ -85,37 +95,16 @@ const GeolocationValidation = ({ withinRadius, onToggleRadius }) => {
                 )}
               </div>
               <div>
-                <h4 className={`font-medium ${withinRadius ? 'text-emerald-800' : 'text-amber-800'}`}>
-                  {withinRadius ? 'Delivery Available' : 'Limited Availability'}
+                <h4 className={`font-semibold ${withinRadius ? 'text-emerald-800' : 'text-amber-800'}`}>
+                  {withinRadius ? 'Fast 30-Minute Express Delivery' : 'Extended Radius Notice'}
                 </h4>
-                <p className={`mt-1 text-sm ${withinRadius ? 'text-emerald-700' : 'text-amber-700'}`}>
+                <p className={`mt-1 text-xs ${withinRadius ? 'text-emerald-700' : 'text-amber-700'}`}>
                   {withinRadius
-                    ? 'Great news! You are within our active 30-minute delivery radius. All nearby restaurants are available.'
-                    : 'Some items may not be available or may have longer delivery times due to your location.'}
+                    ? 'Your selected location is inside our active 7km (30-minute) express circle. All cloud kitchens in your area are available for instant ordering.'
+                    : 'Your selected location is outside our standard 30-minute delivery ring. Higher delivery fees or longer fulfillment times may apply.'}
                 </p>
               </div>
             </div>
-          </div>
-        </div>
-
-        <div className="relative rounded-xl overflow-hidden bg-slate-100 h-64">
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center">
-              <div className="relative">
-                <div className={`absolute inset-0 ${withinRadius ? 'bg-emerald-200' : 'bg-amber-200'} rounded-full blur-xl opacity-50 animate-pulse`} />
-                <div className={`relative mx-auto w-4 h-4 rounded-full ${withinRadius ? 'bg-emerald-500' : 'bg-amber-500'}`} />
-              </div>
-              <div className={`mt-2 h-32 w-32 rounded-full border-2 ${withinRadius ? 'border-emerald-400' : 'border-amber-400'} border-dashed`} />
-              <p className="mt-4 text-sm text-slate-500">30-min radius</p>
-            </div>
-          </div>
-          <div className="absolute bottom-3 right-3">
-            <Button variant="secondary" size="sm" onClick={onToggleRadius}>
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              Test Radius
-            </Button>
           </div>
         </div>
       </div>

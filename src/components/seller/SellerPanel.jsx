@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Clock, Edit3, Megaphone, MessageSquare, Plus, ReceiptText, Save } from 'lucide-react';
-import { Badge, Button, Card, Input } from '../common';
+import { Clock, Edit3, MapPin, Megaphone, MessageSquare, Plus, ReceiptText, Save } from 'lucide-react';
+import { Badge, Button, Card, Input, MapPicker } from '../common';
+import InboxMessaging from '../customer/InboxMessaging';
+
 
 const SellerPanel = () => {
   const [menu, setMenu] = useState([]);
   const [orders, setOrders] = useState([]);
   const [messages, setMessages] = useState([]);
+  const [replyText, setReplyText] = useState('');
+  const [sendingMsg, setSendingMsg] = useState(false);
   const [earnings, setEarnings] = useState([
     { label: 'Today', value: '$0.00', delta: '+0%' },
     { label: 'This Week', value: '$0.00', delta: '+0%' },
@@ -13,11 +17,82 @@ const SellerPanel = () => {
     { label: 'Total Sales', value: '$0.00', delta: '+0%' }
   ]);
 
-  const [draft, setDraft] = useState({ name: '', price: '', stock: '' });
+  const [draft, setDraft] = useState({ name: '', price: '', stock: '', description: '' });
   const [offer, setOffer] = useState({ title: 'Lunch Rush Deal', discount: '20', duration: '45' });
   const [imageFile, setImageFile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [kitchenLocation, setKitchenLocation] = useState({
+    lat: 23.8103,
+    lng: 90.4125,
+    address: '',
+  });
+
+  const handleUpdateOrderStatus = async (orderId, newStatus) => {
+    try {
+      const res = await fetch('/api/seller/orders', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, status: newStatus }),
+      });
+
+      if (res.ok) {
+        setOrders((prev) =>
+          prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
+        );
+        loadEarnings();
+      } else {
+        const errData = await res.json();
+        alert(errData.error || 'Failed to update order status');
+      }
+    } catch (err) {
+      console.error('Error updating seller order status:', err);
+    }
+  };
+
+  const handleSendReply = async () => {
+    if (!replyText.trim()) return;
+    setSendingMsg(true);
+    try {
+      const res = await fetch('/api/seller/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: replyText.trim() }),
+      });
+
+      if (res.ok) {
+        setReplyText('');
+        loadMessages();
+      } else {
+        const errData = await res.json();
+        alert(errData.error || 'Failed to send message');
+      }
+    } catch (err) {
+      console.error('Error sending seller message:', err);
+    } finally {
+      setSendingMsg(false);
+    }
+  };
+
+  const loadProfile = async () => {
+    try {
+      const res = await fetch('/api/users/profile');
+      if (res.ok) {
+        const result = await res.json();
+        if (result.success && result.data) {
+          const lat = result.data.latitude ? Number(result.data.latitude) : 23.8103;
+          const lng = result.data.longitude ? Number(result.data.longitude) : 90.4125;
+          setKitchenLocation({
+            lat,
+            lng,
+            address: result.data.location || '',
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Error loading seller profile location:', err);
+    }
+  };
 
   // 1. Fetch all seller panel data on mount
   const loadMenu = async () => {
@@ -91,13 +166,14 @@ const SellerPanel = () => {
   useEffect(() => {
     const fetchAllData = async () => {
       setLoading(true);
-      await Promise.all([loadMenu(), loadOrders(), loadMessages(), loadEarnings()]);
+      await Promise.all([loadProfile(), loadMenu(), loadOrders(), loadMessages(), loadEarnings()]);
       setLoading(false);
     };
     fetchAllData();
   }, []);
 
-  // 2. Add menu item handler (supports image file upload)
+
+  // 2. Add menu item handler (supports image file upload and description/ingredients)
   const addItem = async (event) => {
     event.preventDefault();
     if (!draft.name || !draft.price) return;
@@ -107,6 +183,7 @@ const SellerPanel = () => {
       formData.append('name', draft.name);
       formData.append('price', draft.price);
       formData.append('stock', draft.stock || '50');
+      formData.append('description', draft.description || '');
       if (imageFile) {
         formData.append('file', imageFile);
       }
@@ -120,7 +197,7 @@ const SellerPanel = () => {
         const result = await res.json();
         if (result.success && result.data) {
           setMenu((prev) => [result.data, ...prev]);
-          setDraft({ name: '', price: '', stock: '' });
+          setDraft({ name: '', price: '', stock: '', description: '' });
           setImageFile(null);
           const fileInput = document.getElementById('menu-item-image');
           if (fileInput) fileInput.value = '';
@@ -244,6 +321,15 @@ const SellerPanel = () => {
               <Input placeholder="Stock" type="number" value={draft.stock} onChange={(e) => setDraft((p) => ({ ...p, stock: e.target.value }))} />
               <Input placeholder="Price" value={draft.price} onChange={(e) => setDraft((p) => ({ ...p, price: e.target.value }))} />
             </div>
+            <div>
+              <textarea
+                placeholder="Description & Ingredients (e.g. Fresh Atlantic salmon fillet, avocado, quinoa, sesame oil, citrus dressing)"
+                value={draft.description}
+                onChange={(e) => setDraft((p) => ({ ...p, description: e.target.value }))}
+                rows={2}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 resize-none"
+              />
+            </div>
             <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-3">
               <div className="flex flex-col gap-1">
                 <span className="text-xs font-semibold text-slate-500">Item Image</span>
@@ -267,7 +353,7 @@ const SellerPanel = () => {
             ) : (
               menu.map((item) => (
                 <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-start gap-4">
                     {item.image_url ? (
                       <img src={item.image_url} alt={item.name} className="h-12 w-12 rounded-xl object-cover border border-slate-100" />
                     ) : (
@@ -280,6 +366,11 @@ const SellerPanel = () => {
                     <div>
                       <p className="font-semibold text-slate-900">{item.name}</p>
                       <p className="text-sm text-slate-500">${Number(item.price).toFixed(2)} / Stock {item.stock}</p>
+                      {item.description && (
+                        <p className="mt-1 text-xs text-slate-600 bg-slate-50 px-2 py-1 rounded border border-slate-100 max-w-md">
+                          <strong>Ingredients/Details:</strong> {item.description}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -307,18 +398,70 @@ const SellerPanel = () => {
               <p className="text-center py-4 text-sm text-slate-400">No orders found.</p>
             ) : (
               orders.map((order) => (
-                <div key={order.id} className="rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="flex items-center justify-between gap-3">
+                <div key={order.id} className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="font-semibold text-slate-900">{order.customer}</p>
-                      <p className="text-xs text-slate-400">ID: {order.id}</p>
-                      <p className="mt-1 text-sm text-slate-500">{order.item}</p>
+                      <p className="text-xs text-slate-400 font-mono">ID: {order.id}</p>
+                      <p className="mt-1 text-sm text-slate-700 font-medium">{order.item}</p>
                     </div>
-                    <Badge variant={order.type === 'Regular' ? 'success' : 'warning'}>{order.type}</Badge>
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge variant={order.type === 'Regular' ? 'success' : 'warning'}>{order.type}</Badge>
+                      <Badge variant={
+                        order.status === 'Pending' ? 'warning' :
+                        order.status === 'Preparing' ? 'primary' :
+                        order.status === 'Ready' ? 'info' :
+                        order.status === 'Cancelled' ? 'danger' : 'success'
+                      } size="sm">
+                        {order.status}
+                      </Badge>
+                    </div>
                   </div>
-                  <div className="mt-3 flex items-center justify-between text-sm">
-                    <span className="text-slate-500">{order.status} / {order.eta}</span>
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-sm">
                     <span className="font-semibold text-slate-900">${order.value.toFixed(2)}</span>
+                    
+                    <div className="flex flex-wrap items-center gap-2">
+                      {order.status === 'Pending' && (
+                        <>
+                          <Button size="sm" onClick={() => handleUpdateOrderStatus(order.id, 'Preparing')}>
+                            Confirm & Cook
+                          </Button>
+                          <Button size="sm" variant="danger" onClick={() => handleUpdateOrderStatus(order.id, 'Cancelled')}>
+                            Cancel
+                          </Button>
+                        </>
+                      )}
+
+                      {order.status === 'Preparing' && (
+                        <Button size="sm" variant="success" onClick={() => handleUpdateOrderStatus(order.id, 'Ready')}>
+                          Pass to Delivery Man
+                        </Button>
+                      )}
+
+                      {order.status === 'Ready' && (
+                        <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
+                          Passed for Delivery (Awaiting Rider)
+                        </span>
+                      )}
+
+                      {order.status === 'Accepted' && (
+                        <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-200">
+                          Delivery Rider Assigned
+                        </span>
+                      )}
+
+                      {order.status === 'Picked Up' && (
+                        <span className="text-xs font-semibold text-orange-600 bg-orange-50 px-2.5 py-1 rounded-md border border-orange-200">
+                          On The Way to Customer
+                        </span>
+                      )}
+
+                      {order.status === 'Delivered' && (
+                        <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">
+                          Delivered
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))
@@ -347,31 +490,39 @@ const SellerPanel = () => {
           <Button className="mt-4" icon={<Save className="h-4 w-4" />} onClick={publishOffer}>Publish Offer</Button>
         </Card>
 
-        <Card>
-          <div className="mb-5 flex items-center gap-2">
-            <MessageSquare className="h-5 w-5 text-slate-500" />
-            <h3 className="text-xl font-semibold text-slate-900">Inbox</h3>
-          </div>
-          <div className="space-y-3">
-            {messages.length === 0 ? (
-              <p className="text-center py-4 text-sm text-slate-400">No messages in inbox.</p>
-            ) : (
-              messages.map((message) => (
-                <div key={message.id} className="rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="flex items-center justify-between">
-                    <p className="font-semibold text-slate-900">{message.from}</p>
-                    {message.unread && <Badge variant="danger" size="sm">Unread</Badge>}
-                  </div>
-                  <p className="mt-2 text-sm text-slate-600">{message.text}</p>
-                  <p className="mt-2 text-xs text-slate-400">{message.time}</p>
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
+        <InboxMessaging userRole="seller" />
       </section>
+
+      {/* Cloud Kitchen Physical Location Map */}
+      <Card>
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <MapPin className="h-5 w-5 text-orange-500" />
+            <div>
+              <h3 className="text-xl font-semibold text-slate-900">Cloud Kitchen Location Map</h3>
+              <p className="text-xs text-slate-500">Pin your physical kitchen location in Bangladesh so local customers within your 30-min radius can find you.</p>
+            </div>
+          </div>
+          <Badge variant="success">Active in Bangladesh</Badge>
+        </div>
+
+        <MapPicker
+          initialLat={kitchenLocation.lat}
+          initialLng={kitchenLocation.lng}
+          radiusMeters={7000} // 7km kitchen coverage radius
+          circleColor="#ef4444" // RED circle for Seller Operation Area
+          showSaveButton={true}
+          height="350px"
+          onLocationChange={(loc) => {
+            setKitchenLocation(loc);
+          }}
+        />
+      </Card>
+
+
     </div>
   );
 };
+
 
 export default SellerPanel;

@@ -38,8 +38,19 @@ export async function PUT(request: NextRequest) {
 
     const body = await request.json();
 
-    if (!body.full_name || !body.phone || !body.email) {
-      return NextResponse.json({ error: 'Missing required fields: full_name, phone, email' }, { status: 400 });
+    // Fetch existing profile to preserve unchanged fields
+    const { data: existingProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    const full_name = body.full_name || existingProfile?.full_name || user.user_metadata?.full_name || 'User';
+    const phone = body.phone || existingProfile?.phone || '';
+    const email = body.email || existingProfile?.email || user.email || '';
+
+    if (!full_name || !email) {
+      return NextResponse.json({ error: 'Missing required profile identity fields' }, { status: 400 });
     }
 
     // 1. Update Auth details if password or email is changed
@@ -67,16 +78,23 @@ export async function PUT(request: NextRequest) {
 
     // 2. Update profiles table
     const profileUpdates: any = {
-      full_name: body.full_name,
-      phone: body.phone,
-      email: body.email,
-      location: body.location || '',
+      full_name,
+      phone,
+      email,
+      location: body.location !== undefined ? body.location : (existingProfile?.location || ''),
       updated_at: new Date().toISOString(),
     };
 
+    if (body.latitude !== undefined && body.latitude !== null) {
+      profileUpdates.latitude = body.latitude;
+    }
+    if (body.longitude !== undefined && body.longitude !== null) {
+      profileUpdates.longitude = body.longitude;
+    }
+
     // Sellers only: add/update shop_name
     if (user.profile.role === 'seller') {
-      profileUpdates.shop_name = body.shop_name || '';
+      profileUpdates.shop_name = body.shop_name !== undefined ? body.shop_name : (existingProfile?.shop_name || '');
     }
 
     const { data: updatedProfile, error: dbError } = await supabaseAdmin

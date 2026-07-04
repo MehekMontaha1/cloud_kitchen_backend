@@ -1,8 +1,10 @@
 {
-  "/api/users/profile/route": "app/api/users/profile/route.js",
+  "/api/chats/route": "app/api/chats/route.js",
   "/api/auth/logout/route": "app/api/auth/logout/route.js",
   "/api/auth/login/route": "app/api/auth/login/route.js",
+  "/api/users/profile/route": "app/api/users/profile/route.js",
   "/api/delivery/available/route": "app/api/delivery/available/route.js",
   "/api/delivery/accepted/route": "app/api/delivery/accepted/route.js",
-  "/api/delivery/messages/route": "app/api/delivery/messages/route.js"
+  "/api/delivery/messages/route": "app/api/delivery/messages/route.js",
+  "/api/delivery/status/route": "app/api/delivery/status/route.js"
 }

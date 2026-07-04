@@ -40,6 +40,7 @@ export async function POST(request: NextRequest) {
     const name = formData.get('name') as string;
     const priceStr = formData.get('price') as string;
     const stockStr = formData.get('stock') as string;
+    const description = (formData.get('description') as string) || '';
     const file = formData.get('file') as File | null;
 
     if (!name || !priceStr) {
@@ -116,6 +117,7 @@ export async function POST(request: NextRequest) {
       name: name,
       price: price,
       stock: stock,
+      description: description,
       image_url: imageUrl || undefined,
     });
 
