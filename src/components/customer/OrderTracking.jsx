@@ -229,7 +229,7 @@ const OrderTracking = ({ orderId, onClose }) => {
             <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Order Items</span>
             <div className="flex items-center justify-between text-sm pt-1">
               <span className="text-slate-800 font-medium">{trackingData?.itemName}</span>
-              <span className="font-semibold text-slate-900">${trackingData?.value?.toFixed(2)}</span>
+              <span className="font-semibold text-slate-900">৳{trackingData?.value?.toFixed(2)}</span>
             </div>
             <div className="text-xs text-slate-500 flex items-start gap-1 pt-1 border-t border-slate-100 mt-2">
               <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0 mt-0.5" />

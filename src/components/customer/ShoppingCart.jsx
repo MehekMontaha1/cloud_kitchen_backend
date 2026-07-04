@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Card, Button, Badge, Modal } from '../common';
 
-const formatPrice = (price) => `$${price.toFixed(2)}`;
+const formatPrice = (price) => `৳${price.toFixed(2)}`;
 
 const ShoppingCart = ({ items, onRemove, onCheckout }) => {
   const [showCheckout, setShowCheckout] = useState(false);

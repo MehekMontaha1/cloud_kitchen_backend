@@ -42,7 +42,7 @@ const OffersFlashDeals = ({ deals, promoCode, onPromoChange }) => {
     } else if (code === 'FLAVOR15') {
       setPromoStatus({ success: true, message: '15% discount applied!' });
     } else if (code === 'NEWUSER20') {
-      setPromoStatus({ success: true, message: '$5 off your order!' });
+      setPromoStatus({ success: true, message: '৳5 off your order!' });
     } else if (code === 'FREEDELIVERY') {
       setPromoStatus({ success: true, message: 'Free delivery activated!' });
     } else {
@@ -148,8 +148,8 @@ const OffersFlashDeals = ({ deals, promoCode, onPromoChange }) => {
                   <p className="mt-0.5 text-sm text-slate-500">{deal.description}</p>
 
                   <div className="mt-3 flex items-center gap-2">
-                    <span className="text-lg font-semibold text-slate-900">{deal.dealPrice}</span>
-                    <span className="text-sm text-slate-400 line-through">{deal.originalPrice.toFixed(2)}</span>
+                    <span className="text-lg font-semibold text-slate-900">৳{deal.dealPrice}</span>
+                    <span className="text-sm text-slate-400 line-through">৳{deal.originalPrice.toFixed(2)}</span>
                   </div>
 
                   <div className="mt-4 flex items-center justify-between">

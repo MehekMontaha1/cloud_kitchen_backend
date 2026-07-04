@@ -20,6 +20,7 @@ import {
   OrderTracking,
 } from './components/customer';
 import GeminiFoodAssistant from './components/customer/GeminiFoodAssistant';
+import LandingPage from './components/landing/LandingPage';
 
 import SellerPanel from './components/seller/SellerPanel';
 import DeliveryPanel from './components/delivery/DeliveryPanel';
@@ -473,7 +474,7 @@ function App() {
   }
 
   if (!session) {
-    return <AuthPanel onEnter={handleLogin} />;
+    return <LandingPage onEnterSession={handleLogin} />;
   }
 
   return (

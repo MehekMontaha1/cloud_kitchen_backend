@@ -115,7 +115,7 @@ const GeminiFoodAssistant = ({ activeFoodItem, onClearActiveFood }) => {
           <div className="flex items-center gap-2 text-xs text-emerald-950 font-medium">
             <Utensils className="h-4 w-4 text-emerald-600 shrink-0" />
             <span>
-              Analyzing: <strong>{activeFoodItem.name}</strong> (${activeFoodItem.price}) — <em>{activeFoodItem.description}</em>
+              Analyzing: <strong>{activeFoodItem.name}</strong> (৳{activeFoodItem.price}) — <em>{activeFoodItem.description}</em>
             </span>
           </div>
           <button

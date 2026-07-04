@@ -44,7 +44,7 @@ const AnalyticsDashboard = () => {
   const stats = [
     { label: 'Total Users', value: metrics.totalUsers, icon: <Users className="h-5 w-5 text-indigo-500" /> },
     { label: 'Total Orders', value: metrics.totalOrders, icon: <ShoppingBag className="h-5 w-5 text-emerald-500" /> },
-    { label: 'Total Revenue', value: `$${Number(metrics.totalRevenue).toFixed(2)}`, icon: <DollarSign className="h-5 w-5 text-amber-500" /> },
+    { label: 'Total Revenue', value: `৳${Number(metrics.totalRevenue).toFixed(2)}`, icon: <DollarSign className="h-5 w-5 text-amber-500" /> },
     { label: 'Active Sellers', value: metrics.activeSellers, icon: <Store className="h-5 w-5 text-orange-500" /> },
     { label: 'Active Riders', value: metrics.activeDelivery, icon: <Truck className="h-5 w-5 text-sky-500" /> },
     { label: 'Open Reports', value: metrics.openReports, icon: <AlertTriangle className="h-5 w-5 text-rose-500" /> },

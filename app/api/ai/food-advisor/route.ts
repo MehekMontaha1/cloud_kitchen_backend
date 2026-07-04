@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
 
     let foodContext = '';
     if (foodItem) {
-      foodContext = `\n[Food Item Details]\nName: ${foodItem.name}\nSeller/Kitchen: ${foodItem.seller || 'Cloud Kitchen'}\nPrice: $${foodItem.price}\nDescription & Ingredients: ${foodItem.description || 'Not specified'}\n`;
+      foodContext = `\n[Food Item Details]\nName: ${foodItem.name}\nSeller/Kitchen: ${foodItem.seller || 'Cloud Kitchen'}\nPrice: ৳${foodItem.price}\nDescription & Ingredients: ${foodItem.description || 'Not specified'}\n`;
     }
 
     const systemPrompt = `You are an expert AI Food & Health Assistant for CloudKitchen. 

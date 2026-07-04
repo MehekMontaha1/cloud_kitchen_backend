@@ -97,7 +97,7 @@ const CustomOrders = ({ onSubmit }) => {
           />
           <Input
             label="Budget (optional)"
-            placeholder="$0.00"
+            placeholder="৳0.00"
             value={form.budget}
             onChange={handleChange('budget')}
           />

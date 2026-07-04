@@ -186,10 +186,10 @@ export async function getSellerEarnings(sellerId: string) {
     }
 
     return [
-      { label: 'Today', value: `$${todayTotal.toFixed(2)}`, delta: '+14%' },
-      { label: 'This Week', value: `$${weekTotal.toFixed(2)}`, delta: '+8%' },
-      { label: 'Custom Orders', value: `$${customTotal.toFixed(2)}`, delta: '+21%' },
-      { label: 'Total Sales', value: `$${totalSales.toFixed(2)}`, delta: '+18%' },
+      { label: 'Today', value: `৳${todayTotal.toFixed(2)}`, delta: '+14%' },
+      { label: 'This Week', value: `৳${weekTotal.toFixed(2)}`, delta: '+8%' },
+      { label: 'Custom Orders', value: `৳${customTotal.toFixed(2)}`, delta: '+21%' },
+      { label: 'Total Sales', value: `৳${totalSales.toFixed(2)}`, delta: '+18%' },
     ];
   } catch (error) {
     console.error('[Seller Service] Error getting earnings:', error);

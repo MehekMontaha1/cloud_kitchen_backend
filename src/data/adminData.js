@@ -56,7 +56,7 @@ export const messagesData = [
 export const analyticsData = {
   totalUsers: { value: '148.2k', delta: '+6.1%', trend: 'up' },
   ordersToday: { value: '4,512', delta: '+3.4%', trend: 'up' },
-  monthlyRevenue: { value: '$1.28m', delta: '+8.9%', trend: 'up' },
+  monthlyRevenue: { value: '৳1.28m', delta: '+8.9%', trend: 'up' },
   activeSellers: { value: '324', delta: '+12', trend: 'up' },
   avgDeliveryTime: { value: '28 min', delta: '-2 min', trend: 'down' },
   customerSatisfaction: { value: '94.2%', delta: '+1.2%', trend: 'up' },

@@ -11,10 +11,10 @@ const SellerPanel = () => {
   const [replyText, setReplyText] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
   const [earnings, setEarnings] = useState([
-    { label: 'Today', value: '$0.00', delta: '+0%' },
-    { label: 'This Week', value: '$0.00', delta: '+0%' },
-    { label: 'Custom Orders', value: '$0.00', delta: '+0%' },
-    { label: 'Total Sales', value: '$0.00', delta: '+0%' }
+    { label: 'Today', value: '৳0.00', delta: '+0%' },
+    { label: 'This Week', value: '৳0.00', delta: '+0%' },
+    { label: 'Custom Orders', value: '৳0.00', delta: '+0%' },
+    { label: 'Total Sales', value: '৳0.00', delta: '+0%' }
   ]);
 
   const [draft, setDraft] = useState({ name: '', price: '', stock: '', description: '' });
@@ -365,7 +365,7 @@ const SellerPanel = () => {
                     )}
                     <div>
                       <p className="font-semibold text-slate-900">{item.name}</p>
-                      <p className="text-sm text-slate-500">${Number(item.price).toFixed(2)} / Stock {item.stock}</p>
+                      <p className="text-sm text-slate-500">৳{Number(item.price).toFixed(2)} / Stock {item.stock}</p>
                       {item.description && (
                         <p className="mt-1 text-xs text-slate-600 bg-slate-50 px-2 py-1 rounded border border-slate-100 max-w-md">
                           <strong>Ingredients/Details:</strong> {item.description}

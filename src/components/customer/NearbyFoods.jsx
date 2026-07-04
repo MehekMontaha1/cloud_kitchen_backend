@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { Card, Button, Badge, Toggle } from '../common';
 import { MapPin, Sparkles } from 'lucide-react';
 
-const formatPrice = (price) => `$${price.toFixed(2)}`;
+const formatPrice = (price) => `৳${price.toFixed(2)}`;
 
 // Distance calculation helper (Haversine formula in KM)
 function calculateDistanceKm(lat1, lon1, lat2, lon2) {

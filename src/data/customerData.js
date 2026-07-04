@@ -171,7 +171,7 @@ export const botResponses = {
     suggestions: ['Apply discount?', 'Contact support'],
   },
   'Apply discount?': {
-    answer: 'Great news! Use code FLAVOR15 for 15% off your next order, or try NEWUSER20 for $5 off first-time orders!',
+    answer: 'Great news! Use code FLAVOR15 for 15% off your next order, or try NEWUSER20 for ৳5 off first-time orders!',
     suggestions: ['Where is my order?', 'Contact support'],
   },
   'Cancel order': {

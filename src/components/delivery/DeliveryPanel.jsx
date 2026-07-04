@@ -274,7 +274,7 @@ const DeliveryPanel = () => {
                   />
 
                   <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
-                    <p className="text-sm text-slate-500">{order.eta} / {order.type} / Value: ${Number(order.value).toFixed(2)}</p>
+                    <p className="text-sm text-slate-500">{order.eta} / {order.type} / Value: ৳{Number(order.value).toFixed(2)}</p>
                     <Button
                       size="sm"
                       variant={order.status === 'Delivered' ? 'secondary' : 'primary'}
@@ -341,7 +341,7 @@ const DeliveryPanel = () => {
                     />
 
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
-                      <span className="text-xs text-slate-500">{order.eta} / {order.type} / Value: ${Number(order.value).toFixed(2)}</span>
+                      <span className="text-xs text-slate-500">{order.eta} / {order.type} / Value: ৳{Number(order.value).toFixed(2)}</span>
                       <Button size="sm" onClick={() => handleAcceptOrder(order.id)}>
                         Accept Task
                       </Button>
