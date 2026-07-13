@@ -1,3 +1,10 @@
 {
-  "/api/chats/route": "app/api/chats/route.js"
+  "/api/customer/foods/route": "app/api/customer/foods/route.js",
+  "/api/orders/route": "app/api/orders/route.js",
+  "/api/customer/messages/route": "app/api/customer/messages/route.js",
+  "/api/users/profile/route": "app/api/users/profile/route.js",
+  "/api/customer/flash-deals/route": "app/api/customer/flash-deals/route.js",
+  "/api/chats/route": "app/api/chats/route.js",
+  "/api/auth/session/route": "app/api/auth/session/route.js",
+  "/api/ai/history/route": "app/api/ai/history/route.js"
 }

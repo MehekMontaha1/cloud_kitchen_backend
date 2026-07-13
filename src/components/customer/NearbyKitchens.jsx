@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { Card, Button, Badge } from '../common';
 import { Store, Star, MapPin, Clock, ArrowLeft, AlertCircle, ShoppingCart, Sparkles } from 'lucide-react';
 
-const NearbyKitchens = ({ foods, onOrder, onAskAI }) => {
+const NearbyKitchens = ({ foods, onOrder, onAskAI, hasLocation = true }) => {
   const [selectedKitchenId, setSelectedKitchenId] = useState(null);
 
   // Extract unique kitchens from the nearby foods list
@@ -44,6 +44,27 @@ const NearbyKitchens = ({ foods, onOrder, onAskAI }) => {
   const findAlternativeItem = (currentItemId) => {
     return kitchenItems.find((item) => item.id !== currentItemId && item.stock > 0) || null;
   };
+
+  if (!hasLocation) {
+    return (
+      <Card className="border border-slate-200">
+        <div className="mb-4">
+          <div className="flex items-center gap-2">
+            <Store className="h-5 w-5 text-orange-500" />
+            <h2 className="text-lg font-bold text-slate-900">Nearby Kitchens</h2>
+            <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded-full font-bold">
+              0 Available
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">Select your delivery location on the map to view nearby kitchens.</p>
+        </div>
+
+        <div className="py-8 text-center rounded-xl bg-slate-50 border border-dashed border-slate-200">
+          <p className="text-xs text-slate-500">No kitchens are shown until a customer delivery location is selected.</p>
+        </div>
+      </Card>
+    );
+  }
 
   if (selectedKitchen) {
     return (

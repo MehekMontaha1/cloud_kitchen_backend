@@ -8,8 +8,16 @@ export async function GET(request: NextRequest) {
     const lngStr = searchParams.get('lng');
     const radiusStr = searchParams.get('radius');
 
-    const lat = latStr ? parseFloat(latStr) : 23.8103; // Default Dhaka
-    const lng = lngStr ? parseFloat(lngStr) : 90.4125;
+    if (!latStr || !lngStr) {
+      return NextResponse.json({ success: true, data: [] }, { status: 200 });
+    }
+
+    const lat = parseFloat(latStr);
+    const lng = parseFloat(lngStr);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return NextResponse.json({ error: 'Valid lat and lng are required' }, { status: 400 });
+    }
+
     const radius = radiusStr ? parseFloat(radiusStr) : 7; // Default 7km (~30 min radius)
 
     const foods = await getAreaFilteredFoods(lat, lng, radius);

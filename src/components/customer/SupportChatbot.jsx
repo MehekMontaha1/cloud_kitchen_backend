@@ -2,17 +2,41 @@ import { useState, useRef, useEffect } from 'react';
 import { Card, Button } from '../common';
 import { Send, Sparkles, MessageSquare } from 'lucide-react';
 
+const welcomeMessage = {
+  id: 0,
+  from: 'bot',
+  text: "Hi there! I'm CloudBot, your CloudKitchen customer support assistant. How can I help you today?",
+};
+
 const SupportChatbot = () => {
-  const [messages, setMessages] = useState([
-    {
-      id: 0,
-      from: 'bot',
-      text: "Hi there! I'm CloudBot, your CloudKitchen customer support assistant. How can I help you today?",
-    },
-  ]);
+  const [messages, setMessages] = useState([welcomeMessage]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const scrollContainerRef = useRef(null);
+
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        const res = await fetch('/api/ai/history?conversation_type=support&limit=50');
+        if (!res.ok) return;
+
+        const result = await res.json();
+        const savedMessages = (result.data || []).map((item) => ({
+          id: item.id,
+          from: item.from === 'ai' ? 'bot' : 'user',
+          text: item.text,
+        }));
+
+        if (savedMessages.length > 0) {
+          setMessages(savedMessages);
+        }
+      } catch (err) {
+        console.warn('Unable to load support chat history:', err);
+      }
+    };
+
+    loadHistory();
+  }, []);
 
   useEffect(() => {
     if (scrollContainerRef.current) {

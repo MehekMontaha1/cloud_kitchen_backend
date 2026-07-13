@@ -14,10 +14,12 @@ const orderSteps = [
 const OrderTracking = ({ orderId, onClose }) => {
   const [trackingData, setTrackingData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [simulatedEta, setSimulatedEta] = useState(18);
 
   const fetchTracking = async () => {
     try {
+      setError('');
       if (orderId && orderId !== 'mock') {
         const res = await fetch(`/api/orders/${orderId}/track`);
         if (res.ok) {
@@ -28,6 +30,10 @@ const OrderTracking = ({ orderId, onClose }) => {
             return;
           }
         }
+
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || 'This order is not available for the current customer.');
+        return;
       }
 
       // Mock fallback data for demonstration if no live DB order ID
@@ -58,6 +64,7 @@ const OrderTracking = ({ orderId, onClose }) => {
       });
     } catch (err) {
       console.error('Error fetching tracking data:', err);
+      setError('Unable to load order tracking right now.');
     } finally {
       setLoading(false);
     }
@@ -76,6 +83,27 @@ const OrderTracking = ({ orderId, onClose }) => {
       <Card>
         <div className="flex h-64 items-center justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-orange-500 border-t-transparent" />
+        </div>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card className="relative overflow-hidden border border-amber-200">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Order Tracking Unavailable</h2>
+            <p className="mt-1 text-sm text-slate-500">{error}</p>
+          </div>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          )}
         </div>
       </Card>
     );

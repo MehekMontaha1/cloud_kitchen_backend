@@ -30,13 +30,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required order details: item_name, value' }, { status: 400 });
     }
 
+    const deliveryLatitude = Number(body.delivery_latitude);
+    const deliveryLongitude = Number(body.delivery_longitude);
+
+    if (!body.delivery_address || !Number.isFinite(deliveryLatitude) || !Number.isFinite(deliveryLongitude)) {
+      return NextResponse.json(
+        { error: 'Please select a valid delivery location before placing an order' },
+        { status: 400 }
+      );
+    }
+
     const order = await createCustomerOrder(user.id, {
       seller_id: body.seller_id || user.id, // Fallback seller ID if dummy item
       item_name: body.item_name,
       value: Number(body.value),
-      delivery_address: body.delivery_address || 'Dhaka, Bangladesh',
-      delivery_latitude: body.delivery_latitude || 23.8103,
-      delivery_longitude: body.delivery_longitude || 90.4125,
+      delivery_address: body.delivery_address,
+      delivery_latitude: deliveryLatitude,
+      delivery_longitude: deliveryLongitude,
       type: body.type || 'Regular',
       items: body.items || null,
     });

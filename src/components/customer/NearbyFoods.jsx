@@ -29,7 +29,7 @@ const CATEGORY_MAPPING = {
   drinks: { label: 'Drinks', emoji: '🥤', keywords: ['drink', 'beverage', 'juice', 'coffee', 'tea', 'shake', 'soda', 'cola', 'lassi'] }
 };
 
-const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLocation }) => {
+const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLocation, hasLocation = true }) => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('eta');
 
@@ -46,6 +46,7 @@ const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLo
 
   // Compute items with dynamic distance & ETA relative to customer's active location
   const processedFoods = useMemo(() => {
+    if (!hasLocation) return [];
     if (!foods || foods.length === 0) return [];
 
     return foods.map((item) => {
@@ -64,7 +65,7 @@ const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLo
         eta: estimatedEta,
       };
     });
-  }, [foods, userLocation]);
+  }, [foods, userLocation, hasLocation]);
 
   const categoriesList = useMemo(() => {
     const predefinedKeys = Object.keys(CATEGORY_MAPPING);
@@ -193,6 +194,35 @@ const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLo
       setSubmittingReview(false);
     }
   };
+
+  if (!hasLocation) {
+    return (
+      <Card>
+        <div className="mb-6 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-semibold text-slate-900">Nearby Foods</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Select your delivery location on the map to discover foods within your delivery radius.
+              </p>
+            </div>
+            <Toggle
+              checked={showNearbyOnly}
+              onChange={onToggle}
+              label="30-min radius"
+              size="md"
+            />
+          </div>
+        </div>
+
+        <div className="py-12 text-center rounded-xl bg-slate-50 border border-dashed border-slate-200">
+          <MapPin className="mx-auto h-10 w-10 text-slate-300" />
+          <p className="mt-4 text-sm font-semibold text-slate-700">No delivery location selected</p>
+          <p className="mt-1 text-xs text-slate-500">Pick a point from the map below before browsing kitchens and food items.</p>
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card>

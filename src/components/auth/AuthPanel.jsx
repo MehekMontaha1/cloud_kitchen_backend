@@ -1,8 +1,7 @@
-import { useState } from 'react';
-import { Bike, ChefHat, LockKeyhole, Mail, ShieldCheck, ShoppingBag, Upload, UserRound, Phone } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Bike, ChefHat, LockKeyhole, Mail, ShieldCheck, ShoppingBag, UserRound, Phone } from 'lucide-react';
 import { Button, Input, Textarea } from '../common';
-import { supabase } from '../../../app/lib/supabase';
-import { registerUser, loginUser, logoutUser, uploadDocument } from '../../../app/lib/api-helpers';
+import { registerUser, loginUser, logoutUser, uploadDocument, requestPasswordReset, resetPassword } from '../../../app/lib/api-helpers';
 
 const roles = [
   {
@@ -31,19 +30,53 @@ const roles = [
   },
 ];
 
-const AuthPanel = ({ onEnter }) => {
+const AuthPanel = ({ onEnter, defaultRole = 'customer' }) => {
   const [mode, setMode] = useState('login');
   const [file, setFile] = useState(null);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     name: '',
     email: '',
     password: '',
-    role: 'customer',
+    confirmPassword: '',
+    role: defaultRole,
     phone: '',
     address: '',
   });
 
   const selectedRole = roles.find((role) => role.value === form.role);
+
+  const getRecoveryTokens = () => {
+    if (typeof window === 'undefined') {
+      return { accessToken: '', refreshToken: '' };
+    }
+
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const searchParams = new URLSearchParams(window.location.search);
+
+    return {
+      accessToken: hashParams.get('access_token') || searchParams.get('access_token') || '',
+      refreshToken: hashParams.get('refresh_token') || searchParams.get('refresh_token') || '',
+    };
+  };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const searchParams = new URLSearchParams(window.location.search);
+    const isRecoveryLink =
+      hashParams.get('type') === 'recovery' ||
+      searchParams.get('type') === 'recovery' ||
+      searchParams.get('reset_password') === 'true' ||
+      window.location.pathname.includes('reset-password');
+
+    if (isRecoveryLink) {
+      setMode('reset');
+      setStatusMessage('');
+    }
+  }, []);
 
   const update = (field) => (event) => {
     setForm((prev) => ({ ...prev, [field]: event.target.value }));
@@ -58,8 +91,36 @@ const AuthPanel = ({ onEnter }) => {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    setStatusMessage('');
+    setSubmitting(true);
 
     try {
+      if (mode === 'forgot') {
+        const result = await requestPasswordReset(form.email);
+        setStatusMessage(result.message || 'If an account exists for this email, a password reset link has been sent.');
+        return;
+      }
+
+      if (mode === 'reset') {
+        if (form.password.length < 6) {
+          throw new Error('Password must be at least 6 characters');
+        }
+        if (form.password !== form.confirmPassword) {
+          throw new Error('Passwords do not match');
+        }
+
+        const { accessToken, refreshToken } = getRecoveryTokens();
+        const result = await resetPassword(accessToken, refreshToken, form.password);
+
+        setForm((prev) => ({ ...prev, password: '', confirmPassword: '' }));
+        if (typeof window !== 'undefined') {
+          window.history.replaceState({}, document.title, '/');
+        }
+        setMode('login');
+        setStatusMessage(result.message || 'Password updated. You can now log in with your new password.');
+        return;
+      }
+
       if (mode === 'login') {
         const result = await loginUser(form.email, form.password);
 
@@ -131,6 +192,8 @@ const AuthPanel = ({ onEnter }) => {
     } catch (error) {
       console.error('Authentication error:', error.message);
       alert(error.message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -197,37 +260,103 @@ const AuthPanel = ({ onEnter }) => {
         </section>
 
         <section className="self-center rounded-2xl border border-slate-200 bg-white p-6 shadow-soft">
-          <div className="mb-5 flex rounded-xl bg-slate-100 p-1">
-            <button
-              className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold ${mode === 'login' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
-              onClick={() => setMode('login')}
-              type="button"
-            >
-              Login
-            </button>
-            {form.role !== 'admin' && (
+          {(mode === 'login' || mode === 'register') ? (
+            <div className="mb-5 flex rounded-xl bg-slate-100 p-1">
               <button
-                className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold ${mode === 'register' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
-                onClick={() => setMode('register')}
+                className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold ${mode === 'login' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                onClick={() => setMode('login')}
                 type="button"
               >
-                Register
+                Login
               </button>
-            )}
-          </div>
+              {form.role !== 'admin' && (
+                <button
+                  className={`flex-1 rounded-lg px-4 py-2 text-sm font-semibold ${mode === 'register' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500'}`}
+                  onClick={() => setMode('register')}
+                  type="button"
+                >
+                  Register
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="mb-5">
+              <button
+                type="button"
+                onClick={() => {
+                  setMode('login');
+                  setStatusMessage('');
+                }}
+                className="text-sm font-semibold text-orange-600 hover:text-orange-700"
+              >
+                Back to login
+              </button>
+            </div>
+          )}
 
-          <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Selected role</p>
-            <p className="mt-1 text-lg font-semibold text-slate-900">{selectedRole.label}</p>
-            <p className="mt-1 text-sm text-slate-500">{selectedRole.description}</p>
-          </div>
+          {(mode === 'login' || mode === 'register') ? (
+            <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">Selected role</p>
+              <p className="mt-1 text-lg font-semibold text-slate-900">{selectedRole.label}</p>
+              <p className="mt-1 text-sm text-slate-500">{selectedRole.description}</p>
+            </div>
+          ) : (
+            <div className="mb-5 rounded-xl border border-orange-200 bg-orange-50 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-orange-600">Password recovery</p>
+              <p className="mt-1 text-lg font-semibold text-slate-900">
+                {mode === 'forgot' ? 'Send reset link' : 'Set a new password'}
+              </p>
+              <p className="mt-1 text-sm text-slate-600">
+                {mode === 'forgot'
+                  ? 'Use the email connected to any customer, seller, delivery, or admin account.'
+                  : 'Enter a new password from your secure reset email link.'}
+              </p>
+            </div>
+          )}
+
+          {statusMessage && (
+            <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+              {statusMessage}
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            {mode === 'register' && (
-              <Input label="Full Name" placeholder="Enter your name" value={form.name} onChange={update('name')} icon={<UserRound className="h-4 w-4" />} required />
+            {(mode === 'login' || mode === 'register' || mode === 'forgot') && (
+              <>
+                {mode === 'register' && (
+                  <Input label="Full Name" placeholder="Enter your name" value={form.name} onChange={update('name')} icon={<UserRound className="h-4 w-4" />} required />
+                )}
+                <Input label="Email" type="email" placeholder="name@example.com" value={form.email} onChange={update('email')} icon={<Mail className="h-4 w-4" />} required />
+              </>
             )}
-            <Input label="Email" type="email" placeholder="name@example.com" value={form.email} onChange={update('email')} icon={<Mail className="h-4 w-4" />} required />
-            <Input label="Password" type="password" placeholder="Enter password" value={form.password} onChange={update('password')} icon={<LockKeyhole className="h-4 w-4" />} required />
+
+            {(mode === 'login' || mode === 'register') && (
+              <div className="space-y-2">
+                <Input label="Password" type="password" placeholder="Enter password" value={form.password} onChange={update('password')} icon={<LockKeyhole className="h-4 w-4" />} required />
+                {mode === 'login' && (
+                  <div className="text-right">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode('forgot');
+                        setStatusMessage('');
+                      }}
+                      className="text-xs font-semibold text-orange-600 hover:text-orange-700"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {mode === 'reset' && (
+              <>
+                <Input label="New Password" type="password" placeholder="Enter new password" value={form.password} onChange={update('password')} icon={<LockKeyhole className="h-4 w-4" />} required />
+                <Input label="Confirm New Password" type="password" placeholder="Confirm new password" value={form.confirmPassword} onChange={update('confirmPassword')} icon={<LockKeyhole className="h-4 w-4" />} required />
+              </>
+            )}
+
             {mode === 'register' && (
               <Input label="Phone Number" type="tel" placeholder="+1234567890" value={form.phone} onChange={update('phone')} icon={<Phone className="h-4 w-4" />} required />
             )}
@@ -252,8 +381,16 @@ const AuthPanel = ({ onEnter }) => {
               <Textarea label="Address" rows={3} placeholder="Business, delivery, or customer address" value={form.address} onChange={update('address')} />
             )}
 
-            <Button type="submit" className="w-full rounded-lg" size="lg">
-              {mode === 'login' ? `Login as ${selectedRole.label}` : `Create ${selectedRole.label} Account`}
+            <Button type="submit" className="w-full rounded-lg" size="lg" disabled={submitting}>
+              {submitting
+                ? 'Please wait...'
+                : mode === 'login'
+                ? `Login as ${selectedRole.label}`
+                : mode === 'register'
+                ? `Create ${selectedRole.label} Account`
+                : mode === 'forgot'
+                ? 'Send Reset Link'
+                : 'Update Password'}
             </Button>
           </form>
         </section>

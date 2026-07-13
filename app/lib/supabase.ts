@@ -14,8 +14,8 @@ const getEnv = (key: string): string => {
   return '';
 };
 
-const supabaseUrl = getEnv('SUPABASE_URL');
-const supabaseAnonKey = getEnv('SUPABASE_ANON_KEY');
+export const supabaseUrl = getEnv('SUPABASE_URL');
+export const supabaseAnonKey = getEnv('SUPABASE_ANON_KEY');
 const supabaseServiceRoleKey = getEnv('SUPABASE_SERVICE_ROLE_KEY');
 
 if (!supabaseUrl || !supabaseAnonKey) {

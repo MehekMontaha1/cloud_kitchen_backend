@@ -43,6 +43,14 @@ const roleLabels = {
   admin: 'Super Admin Panel',
 };
 
+const getTrackingStorageKey = (userId) => `activeTrackingOrderId:${userId}`;
+
+const isValidCustomerLocation = (location) => {
+  const lat = Number(location?.lat);
+  const lng = Number(location?.lng);
+  return Number.isFinite(lat) && Number.isFinite(lng);
+};
+
 function App() {
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -59,37 +67,44 @@ function App() {
   const [claimedDeals, setClaimedDeals] = useState({});
   const [realFoods, setRealFoods] = useState([]);
   const [activeAiFoodItem, setActiveAiFoodItem] = useState(null);
-  const [customerLocation, setCustomerLocation] = useState({
-    lat: 23.8103,
-    lng: 90.4125,
-    address: 'Dhaka, Bangladesh',
-  });
+  const [customerLocation, setCustomerLocation] = useState(null);
   const [paymentStatusMessage, setPaymentStatusMessage] = useState(null);
   const [customerOrders, setCustomerOrders] = useState([]);
-  const [activeTrackingOrderId, setActiveTrackingOrderId] = useState(() => {
+  const [customerOrdersLoaded, setCustomerOrdersLoaded] = useState(false);
+  const [activeTrackingOrderId, setActiveTrackingOrderId] = useState(null);
+  const hasSelectedCustomerLocation = isValidCustomerLocation(customerLocation);
+
+  useEffect(() => {
+    if (session?.role !== 'customer' || !session?.id) {
+      setActiveTrackingOrderId(null);
+      return;
+    }
+
     try {
       if (typeof window !== 'undefined') {
-        return localStorage.getItem('activeTrackingOrderId') || null;
+        setActiveTrackingOrderId(localStorage.getItem(getTrackingStorageKey(session.id)) || null);
       }
     } catch (e) {
       console.warn('localStorage is not available:', e);
     }
-    return null;
-  });
+  }, [session?.id, session?.role]);
 
   useEffect(() => {
+    if (session?.role !== 'customer' || !session?.id) return;
+
     try {
+      const storageKey = getTrackingStorageKey(session.id);
       if (activeTrackingOrderId) {
-        localStorage.setItem('activeTrackingOrderId', activeTrackingOrderId);
+        localStorage.setItem(storageKey, activeTrackingOrderId);
       } else {
-        localStorage.removeItem('activeTrackingOrderId');
+        localStorage.removeItem(storageKey);
       }
     } catch (e) {
       console.warn('localStorage write failed:', e);
     }
-  }, [activeTrackingOrderId]);
+  }, [activeTrackingOrderId, session?.id, session?.role]);
 
-  const loadCustomerData = async () => {
+  const loadCustomerData = async ({ syncProfileLocation = false } = {}) => {
     try {
       // 1. Load Profile to set saved location
       const profileRes = await fetch('/api/users/profile');
@@ -97,12 +112,14 @@ function App() {
         const profileData = await profileRes.json();
         if (profileData.success && profileData.data) {
           const p = profileData.data;
-          if (p.latitude && p.longitude) {
-            setCustomerLocation({
+          if (syncProfileLocation) {
+            const savedLocation = p.latitude && p.longitude ? {
               lat: Number(p.latitude),
               lng: Number(p.longitude),
-              address: p.location || 'Dhaka, Bangladesh',
-            });
+              address: p.location || 'Saved delivery location',
+            } : null;
+
+            setCustomerLocation(savedLocation);
           }
           // Sync avatar and name into session for header display
           if (p.avatar_url || p.full_name) {
@@ -115,16 +132,7 @@ function App() {
         }
       }
 
-      // 2. Load Foods from backend API
-      const foodsRes = await fetch(`/api/customer/foods?lat=${customerLocation.lat}&lng=${customerLocation.lng}`);
-      if (foodsRes.ok) {
-        const foodsDataResult = await foodsRes.json();
-        if (foodsDataResult.success) {
-          setRealFoods(foodsDataResult.data || []);
-        }
-      }
-
-      // 3. Load Flash Deals from backend API
+      // 2. Load Flash Deals from backend API
       const dealsRes = await fetch('/api/customer/flash-deals');
       if (dealsRes.ok) {
         const dealsDataResult = await dealsRes.json();
@@ -133,7 +141,7 @@ function App() {
         }
       }
 
-      // 4. Load Customer Messages from backend API
+      // 3. Load Customer Messages from backend API
       const msgRes = await fetch('/api/customer/messages');
       if (msgRes.ok) {
         const msgDataResult = await msgRes.json();
@@ -142,7 +150,8 @@ function App() {
         }
       }
 
-      // 5. Load Customer Orders from backend API
+      // 4. Load Customer Orders from backend API
+      setCustomerOrdersLoaded(false);
       const ordersRes = await fetch('/api/orders');
       if (ordersRes.ok) {
         const ordersDataResult = await ordersRes.json();
@@ -150,18 +159,51 @@ function App() {
           setCustomerOrders(ordersDataResult.data || []);
         }
       }
+      setCustomerOrdersLoaded(true);
     } catch (err) {
       console.error('Error loading customer backend data:', err);
     }
   };
 
+  const loadCustomerFoods = async () => {
+    if (!hasSelectedCustomerLocation) {
+      setRealFoods([]);
+      return;
+    }
+
+    try {
+      const foodsRes = await fetch(`/api/customer/foods?lat=${customerLocation.lat}&lng=${customerLocation.lng}`);
+      if (foodsRes.ok) {
+        const foodsDataResult = await foodsRes.json();
+        if (foodsDataResult.success) {
+          setRealFoods(foodsDataResult.data || []);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading customer foods:', err);
+    }
+  };
+
   useEffect(() => {
     if (session?.role === 'customer') {
-      loadCustomerData();
+      loadCustomerData({ syncProfileLocation: true });
+    } else {
+      setCustomerLocation(null);
+      setRealFoods([]);
+      setCustomerOrders([]);
+      setCustomerOrdersLoaded(false);
     }
-  }, [session, customerLocation.lat, customerLocation.lng]);
+  }, [session?.id, session?.role]);
+
+  useEffect(() => {
+    if (session?.role === 'customer') {
+      loadCustomerFoods();
+    }
+  }, [session?.id, session?.role, customerLocation?.lat, customerLocation?.lng]);
 
   const visibleFoods = useMemo(() => {
+    if (!hasSelectedCustomerLocation) return [];
+
     return realFoods.map(food => {
       const claim = claimedDeals[food.sellerId];
       if (claim) {
@@ -178,7 +220,7 @@ function App() {
       }
       return food;
     });
-  }, [realFoods, claimedDeals]);
+  }, [realFoods, claimedDeals, hasSelectedCustomerLocation]);
 
   const trackingOrders = useMemo(() => {
     return customerOrders.filter((order) => {
@@ -196,7 +238,14 @@ function App() {
     });
   }, [customerOrders]);
 
+  useEffect(() => {
+    if (!customerOrdersLoaded || !activeTrackingOrderId) return;
 
+    const belongsToCurrentCustomer = customerOrders.some((order) => order.id === activeTrackingOrderId);
+    if (!belongsToCurrentCustomer) {
+      setActiveTrackingOrderId(null);
+    }
+  }, [customerOrdersLoaded, customerOrders, activeTrackingOrderId]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -307,6 +356,7 @@ function App() {
           if (res.ok) {
             setPaymentStatusMessage({ status: 'success', message: 'Payment Successful! Your order has been placed.' });
             const firstOrderId = orderId.split(',')[0];
+            setCustomerOrdersLoaded(false);
             setActiveTrackingOrderId(firstOrderId);
             setCartItems([]);
             // Clear URL params
@@ -347,6 +397,11 @@ function App() {
     }
     setSession(null);
     setCartItems([]);
+    setCustomerLocation(null);
+    setRealFoods([]);
+    setCustomerOrders([]);
+    setCustomerOrdersLoaded(false);
+    setActiveTrackingOrderId(null);
     goTop();
   };
 
@@ -428,6 +483,11 @@ function App() {
 
   const handleCheckout = async () => {
     if (cartItems.length === 0) return;
+    if (!hasSelectedCustomerLocation) {
+      alert('Please select your delivery location on the map before placing an order.');
+      return;
+    }
+
     const totalVal = cartItems.reduce((sum, item) => sum + item.price, 0) + 2.99;
 
     try {
@@ -456,7 +516,7 @@ function App() {
             seller_id: sId === 'default' ? session?.id : sId,
             item_name: items.map(i => i.name).join(', '),
             value: orderValue,
-            delivery_address: customerLocation.address || 'Dhaka, Bangladesh',
+            delivery_address: customerLocation.address || 'Selected delivery location',
             delivery_latitude: customerLocation.lat,
             delivery_longitude: customerLocation.lng,
             items: items.map(i => ({ id: i.id, name: i.name })),
@@ -674,6 +734,7 @@ function App() {
 
       <NearbyKitchens
         foods={visibleFoods}
+        hasLocation={hasSelectedCustomerLocation}
         onOrder={handleOrder}
         onAskAI={(item) => {
           setActiveAiFoodItem(item);
@@ -686,6 +747,7 @@ function App() {
         foods={visibleFoods}
         showNearbyOnly={showNearbyOnly}
         userLocation={customerLocation}
+        hasLocation={hasSelectedCustomerLocation}
         onToggle={() => setShowNearbyOnly((prev) => !prev)}
         onOrder={handleOrder}
         onAskAI={(item) => {
@@ -715,6 +777,7 @@ function App() {
         <section className="grid gap-8 lg:grid-cols-2 p-2">
           <CustomOrders
             foods={visibleFoods}
+            customerLocation={customerLocation}
             onSubmit={async () => {
               await loadCustomerData();
             }}

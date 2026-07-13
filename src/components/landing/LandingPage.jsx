@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Sparkles,
   ShoppingBag,
@@ -30,6 +30,22 @@ const LandingPage = ({ onEnterSession }) => {
     setAuthDefaultRole(role);
     setShowAuthModal(true);
   };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const searchParams = new URLSearchParams(window.location.search);
+    const shouldOpenReset =
+      hashParams.get('type') === 'recovery' ||
+      searchParams.get('type') === 'recovery' ||
+      searchParams.get('reset_password') === 'true' ||
+      window.location.pathname.includes('reset-password');
+
+    if (shouldOpenReset) {
+      setShowAuthModal(true);
+    }
+  }, []);
 
   const featureCards = [
     {
@@ -547,7 +563,7 @@ const LandingPage = ({ onEnterSession }) => {
             >
               <X className="h-5 w-5" />
             </button>
-            <AuthPanel onEnter={(session) => { setShowAuthModal(false); onEnterSession(session); }} />
+            <AuthPanel defaultRole={authDefaultRole} onEnter={(session) => { setShowAuthModal(false); onEnterSession(session); }} />
           </div>
         </div>
       )}

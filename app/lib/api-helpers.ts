@@ -4,6 +4,8 @@ export const AUTH_ENDPOINTS = {
   LOGIN: '/api/auth/login',
   LOGOUT: '/api/auth/logout',
   SESSION: '/api/auth/session',
+  FORGOT_PASSWORD: '/api/auth/forgot-password',
+  RESET_PASSWORD: '/api/auth/reset-password',
 };
 
 export const USER_ENDPOINTS = {
@@ -109,6 +111,46 @@ export async function logoutUser() {
   }
 
   return await res.json();
+}
+
+/**
+ * Request a password reset email
+ */
+export async function requestPasswordReset(email: string) {
+  const res = await fetch(AUTH_ENDPOINTS.FORGOT_PASSWORD, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to send password reset email');
+  }
+
+  return data;
+}
+
+/**
+ * Set a new password from a Supabase recovery link
+ */
+export async function resetPassword(accessToken: string, refreshToken: string, password: string) {
+  const res = await fetch(AUTH_ENDPOINTS.RESET_PASSWORD, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      password,
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.error || 'Failed to reset password');
+  }
+
+  return data;
 }
 
 /**

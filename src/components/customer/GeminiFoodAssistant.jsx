@@ -1,20 +1,47 @@
 import { useState, useRef, useEffect } from 'react';
 import { Card, Button, Badge } from '../common';
-import { Sparkles, HeartPulse, Utensils, Send, Copy, Check, Info, AlertCircle, RefreshCw } from 'lucide-react';
+import { Sparkles, HeartPulse, Utensils, Send, Copy, Check, Info, RefreshCw } from 'lucide-react';
+
+const createWelcomeMessage = () => ({
+  id: 1,
+  from: 'ai',
+  text: "Hi! I'm your Gemini AI Food & Health Assistant. Paste or ask me about any food item's ingredients, health benefits, meal suitability, or dietary advice!",
+  timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+});
 
 const GeminiFoodAssistant = ({ activeFoodItem, onClearActiveFood }) => {
   const [prompt, setPrompt] = useState('');
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      from: 'ai',
-      text: "👋 Hi! I'm your Gemini AI Food & Health Assistant. Paste or ask me about any food item's ingredients, health benefits, meal suitability (lunch/dinner), or dietary advice!",
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    },
-  ]);
+  const [messages, setMessages] = useState([createWelcomeMessage()]);
   const [loading, setLoading] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState(null);
   const scrollContainerRef = useRef(null);
+
+  useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        const res = await fetch('/api/ai/history?conversation_type=food_advisor&limit=50');
+        if (!res.ok) return;
+
+        const result = await res.json();
+        const savedMessages = (result.data || []).map((item) => ({
+          id: item.id,
+          from: item.from,
+          text: item.text,
+          timestamp: item.createdAt
+            ? new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : '',
+        }));
+
+        if (savedMessages.length > 0) {
+          setMessages(savedMessages);
+        }
+      } catch (err) {
+        console.warn('Unable to load Gemini chat history:', err);
+      }
+    };
+
+    loadHistory();
+  }, []);
 
   useEffect(() => {
     if (activeFoodItem) {

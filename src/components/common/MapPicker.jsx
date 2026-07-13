@@ -48,6 +48,7 @@ const MapPicker = ({
   readOnly = false,
   height = '320px',
   zoom = 13,
+  skipInitialReverseGeocode = false,
 }) => {
   const [position, setPosition] = useState([initialLat, initialLng]);
   const [address, setAddress] = useState('');
@@ -60,14 +61,20 @@ const MapPicker = ({
   useEffect(() => {
     if (initialLat && initialLng) {
       setPosition([initialLat, initialLng]);
-      reverseGeocode(initialLat, initialLng);
+      if (skipInitialReverseGeocode) {
+        setAddress('');
+      } else {
+        reverseGeocode(initialLat, initialLng, false);
+      }
     }
-  }, [initialLat, initialLng]);
+  }, [initialLat, initialLng, skipInitialReverseGeocode]);
 
 
   // Reverse geocoding using free Nominatim API
-  const reverseGeocode = async (lat, lng) => {
+  const reverseGeocode = async (lat, lng, notifyParent = true) => {
     setLoadingAddress(true);
+    let formattedAddress = `Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+
     try {
       const res = await fetch(
         `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
@@ -79,15 +86,15 @@ const MapPicker = ({
       );
       if (res.ok) {
         const data = await res.json();
-        const formattedAddress = data.display_name || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-        setAddress(formattedAddress);
-        if (onLocationChange) {
-          onLocationChange({ lat, lng, address: formattedAddress });
-        }
+        formattedAddress = data.display_name || formattedAddress;
       }
     } catch (err) {
       console.error('Geocoding error:', err);
     } finally {
+      setAddress(formattedAddress);
+      if (notifyParent && onLocationChange) {
+        onLocationChange({ lat, lng, address: formattedAddress });
+      }
       setLoadingAddress(false);
     }
   };
@@ -142,12 +149,9 @@ const MapPicker = ({
         console.warn('Browser GPS error, attempting IP fallback...', err);
         const success = await tryIPGeolocation();
         if (!success) {
-          // Default to Dhaka coordinates safely
-          setPosition([23.8103, 90.4125]);
-          reverseGeocode(23.8103, 90.4125);
           setStatusMessage({
-            type: 'info',
-            text: 'Device location unavailable. Center set to Dhaka (Click map to adjust).',
+            type: 'warning',
+            text: 'Device location unavailable. Search for your area or click the map to select delivery location.',
           });
         }
         setIsLocating(false);

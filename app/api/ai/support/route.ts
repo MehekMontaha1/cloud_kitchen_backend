@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/app/lib/auth';
 import { supabaseAdmin } from '@/app/lib/supabase';
+import { getRandomPriorChatContext, saveAiChatMessage } from '@/app/lib/ai-chat-history';
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,6 +18,15 @@ export async function POST(request: NextRequest) {
     }
 
     const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+    const priorChat = await getRandomPriorChatContext(user.id, 'support');
+
+    await saveAiChatMessage({
+      userId: user.id,
+      conversationType: 'support',
+      role: 'user',
+      message: prompt,
+      metadata: { source: 'support_chatbot' },
+    });
 
     // Fetch active paid orders for this customer
     const { data: activeOrders } = await supabaseAdmin
@@ -46,6 +56,11 @@ Your mission is to resolve customer issues politely, helpfully, and very concise
 
 [Current Customer Active Orders Context]
 ${activeOrdersContext}
+${priorChat.context ? `
+[Occasional Previous Support Chat Context]
+Use this only if it helps answer the current query. Do not mention it unless relevant.
+${priorChat.context}
+` : ''}
 
 Instructions:
 1. If the user asks about their order status (e.g. "where is my order", "track order", etc.), use the active orders context above to tell them the kitchen, items, status, and ETA. If they have no active orders, inform them.
@@ -109,10 +124,22 @@ User Query: "${prompt}"`;
       }
     }
 
+    await saveAiChatMessage({
+      userId: user.id,
+      conversationType: 'support',
+      role: 'ai',
+      message: aiResponseText,
+      metadata: {
+        source: 'support_chatbot',
+        usedPreviousChat: priorChat.usedMemory,
+      },
+    });
+
     return NextResponse.json({
       success: true,
       data: {
         text: aiResponseText,
+        usedPreviousChat: priorChat.usedMemory,
       },
     }, { status: 200 });
   } catch (error: any) {

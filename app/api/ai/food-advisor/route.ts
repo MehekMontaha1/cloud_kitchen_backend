@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/app/lib/auth';
+import { getRandomPriorChatContext, saveAiChatMessage } from '@/app/lib/ai-chat-history';
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,6 +17,20 @@ export async function POST(request: NextRequest) {
     }
 
     const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+    const priorChat = await getRandomPriorChatContext(user.id, 'food_advisor');
+    const foodItemName = foodItem?.name || null;
+
+    await saveAiChatMessage({
+      userId: user.id,
+      conversationType: 'food_advisor',
+      role: 'user',
+      message: prompt,
+      foodItemName,
+      metadata: {
+        source: 'gemini_food_assistant',
+        foodItem: foodItem || null,
+      },
+    });
 
     let foodContext = '';
     if (foodItem) {
@@ -34,6 +49,11 @@ CRITICAL INSTRUCTIONS:
    - Give a direct, logical recommendation (Yes or No with a brief reason) based on those estimated or provided calories/protein and the user's question.
 
 ${foodContext}
+${priorChat.context ? `
+[Occasional Previous Food Chat Context]
+Use this only if it helps answer the current food or health question. Do not force it into the answer.
+${priorChat.context}
+` : ''}
 User Query: "${prompt}"`;
 
     let aiResponseText = '';
@@ -133,11 +153,24 @@ User Query: "${prompt}"`;
       aiResponseText = recommendation;
     }
 
+    await saveAiChatMessage({
+      userId: user.id,
+      conversationType: 'food_advisor',
+      role: 'ai',
+      message: aiResponseText,
+      foodItemName,
+      metadata: {
+        source: 'gemini_food_assistant',
+        usedPreviousChat: priorChat.usedMemory,
+      },
+    });
+
     return NextResponse.json({
       success: true,
       data: {
         text: aiResponseText,
         foodItem: foodItem || null,
+        usedPreviousChat: priorChat.usedMemory,
       },
     }, { status: 200 });
   } catch (error: any) {

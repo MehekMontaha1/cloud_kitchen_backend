@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Card, Button, Input, Textarea, Select } from '../common';
 
 const cuisines = [
@@ -17,7 +17,9 @@ const urgency = [
   { value: 'asap', label: 'ASAP' },
 ];
 
-const CustomOrders = ({ foods = [], onSubmit }) => {
+const CustomOrders = ({ foods = [], customerLocation = null, onSubmit }) => {
+  const hasDeliveryLocation = Boolean(customerLocation?.lat && customerLocation?.lng);
+
   // Extract unique kitchens from nearby foods to direct the custom order request
   const kitchens = useMemo(() => {
     const map = {};
@@ -49,6 +51,12 @@ const CustomOrders = ({ foods = [], onSubmit }) => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [submitError, setSubmitError] = useState(null);
 
+  useEffect(() => {
+    if (customerLocation?.address && !form.location) {
+      setForm((prev) => ({ ...prev, location: customerLocation.address }));
+    }
+  }, [customerLocation?.address, form.location]);
+
   const handleChange = (field) => (e) => {
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
     if (errors[field]) {
@@ -62,7 +70,11 @@ const CustomOrders = ({ foods = [], onSubmit }) => {
     if (!form.sellerId) newErrors.sellerId = 'Please select a kitchen';
     if (!form.name.trim()) newErrors.name = 'Food name is required';
     if (!form.description.trim()) newErrors.description = 'Description is required';
-    if (!form.location.trim()) newErrors.location = 'Delivery location is required';
+    if (!hasDeliveryLocation) {
+      newErrors.location = 'Please select your delivery location on the map first';
+    } else if (!form.location.trim()) {
+      newErrors.location = 'Delivery location is required';
+    }
     if (!form.budget.trim() || isNaN(Number(form.budget)) || Number(form.budget) <= 0) {
       newErrors.budget = 'Please enter a valid budget';
     }
@@ -89,7 +101,9 @@ const CustomOrders = ({ foods = [], onSubmit }) => {
           seller_id: form.sellerId,
           item_name: form.name,
           value: Number(form.budget),
-          delivery_address: form.location,
+          delivery_address: form.location || customerLocation.address,
+          delivery_latitude: customerLocation.lat,
+          delivery_longitude: customerLocation.lng,
           type: 'Custom',
           items: [{
             name: form.name,

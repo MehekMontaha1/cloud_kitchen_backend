@@ -193,9 +193,11 @@ export async function getOrderTrackingDetails(orderId: string, customerId: strin
         delivery_partner:profiles!delivery_partner_id(full_name, phone, location, latitude, longitude)
       `)
       .eq('id', orderId)
+      .eq('customer_id', customerId)
+      .eq('payment_status', 'paid')
       .single();
 
-    if (error || !order) throw new Error('Order not found');
+    if (error || !order) throw new Error('Order not found for this customer');
 
     const customerLat = order.delivery_latitude || 23.8103;
     const customerLng = order.delivery_longitude || 90.4125;
