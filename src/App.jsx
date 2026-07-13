@@ -56,6 +56,7 @@ function App() {
   const [promoCode, setPromoCode] = useState('');
   const [chatMessages, setChatMessages] = useState([]);
   const [flashDeals, setFlashDeals] = useState([]);
+  const [claimedDeals, setClaimedDeals] = useState({});
   const [realFoods, setRealFoods] = useState([]);
   const [activeAiFoodItem, setActiveAiFoodItem] = useState(null);
   const [customerLocation, setCustomerLocation] = useState({
@@ -102,6 +103,14 @@ function App() {
               lng: Number(p.longitude),
               address: p.location || 'Dhaka, Bangladesh',
             });
+          }
+          // Sync avatar and name into session for header display
+          if (p.avatar_url || p.full_name) {
+            setSession(prev => prev ? {
+              ...prev,
+              avatar_url: p.avatar_url || prev.avatar_url,
+              name: p.full_name || prev.name,
+            } : prev);
           }
         }
       }
@@ -153,8 +162,23 @@ function App() {
   }, [session, customerLocation.lat, customerLocation.lng]);
 
   const visibleFoods = useMemo(() => {
-    return realFoods;
-  }, [realFoods]);
+    return realFoods.map(food => {
+      const claim = claimedDeals[food.sellerId];
+      if (claim) {
+        const applies = !claim.itemIds || claim.itemIds.includes(food.id);
+        if (applies) {
+          const discountAmt = (food.price * claim.discount) / 100;
+          return {
+            ...food,
+            originalPrice: food.price,
+            price: Number((food.price - discountAmt).toFixed(2)),
+            flashDiscount: claim.discount
+          };
+        }
+      }
+      return food;
+    });
+  }, [realFoods, claimedDeals]);
 
   const trackingOrders = useMemo(() => {
     return customerOrders.filter((order) => {
@@ -391,6 +415,16 @@ function App() {
     setMessages((prev) => prev.filter((message) => message.id !== id));
   };
 
+
+  const handleClaimDeal = (deal) => {
+    setClaimedDeals((prev) => ({
+      ...prev,
+      [deal.sellerId]: {
+        discount: deal.discount,
+        itemIds: deal.itemIds || null,
+      }
+    }));
+  };
 
   const handleCheckout = async () => {
     if (cartItems.length === 0) return;
@@ -669,13 +703,28 @@ function App() {
         />
       </div>
 
-      <section className="grid gap-8 lg:grid-cols-2">
-        <CustomOrders onSubmit={() => {}} />
-        <ShoppingCart
-          items={cartItems}
-          onRemove={handleRemoveItem}
-          onCheckout={handleCheckout}
-        />
+      {/* ── Custom Orders Special Section ── */}
+      <section className="rounded-2xl border-2 border-dashed border-indigo-200 bg-gradient-to-br from-indigo-50 via-white to-purple-50 p-1.5 shadow-sm">
+        <div className="mb-3 px-4 pt-4 flex items-center gap-2">
+          <span className="text-xl">✨</span>
+          <div>
+            <h3 className="font-bold text-indigo-800 text-base">Can't find what you're craving?</h3>
+            <p className="text-xs text-indigo-500">Send a custom food request directly to a kitchen — they'll cook it just for you!</p>
+          </div>
+        </div>
+        <section className="grid gap-8 lg:grid-cols-2 p-2">
+          <CustomOrders
+            foods={visibleFoods}
+            onSubmit={async () => {
+              await loadCustomerData();
+            }}
+          />
+          <ShoppingCart
+            items={cartItems}
+            onRemove={handleRemoveItem}
+            onCheckout={handleCheckout}
+          />
+        </section>
       </section>
 
       <GeolocationValidation
@@ -689,6 +738,7 @@ function App() {
         deals={flashDeals}
         promoCode={promoCode}
         onPromoChange={setPromoCode}
+        onClaimDeal={handleClaimDeal}
       />
 
       <section className="grid gap-8 lg:grid-cols-2">
@@ -722,7 +772,7 @@ function App() {
 
   const renderPanel = () => {
     if (currentView === 'profile') {
-      return <ProfilePanel session={session} onUpdate={(updated) => setSession(prev => ({ ...prev, name: updated.full_name }))} />;
+      return <ProfilePanel session={session} onUpdate={(updated) => setSession(prev => ({ ...prev, name: updated.full_name, avatar_url: updated.avatar_url ?? prev.avatar_url }))} />;
     }
     if (session?.role === 'seller') return <SellerPanel />;
     if (session?.role === 'delivery') return <DeliveryPanel />;
@@ -778,15 +828,23 @@ function App() {
                 <p className="text-sm font-semibold text-slate-900">{session.name || 'Demo User'}</p>
                 <p className="text-xs text-slate-500">{session.email || roleLabels[session.role]}</p>
               </div>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="rounded-lg" 
+              <button
+                title={currentView === 'profile' ? 'Back to Dashboard' : 'My Profile'}
                 onClick={() => setCurrentView(currentView === 'profile' ? 'dashboard' : 'profile')}
+                className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-orange-300 shadow-sm hover:border-orange-500 transition-all"
               >
-                <UserIcon className="h-4 w-4" />
-                {currentView === 'profile' ? 'Dashboard' : 'Profile'}
-              </Button>
+                {session.avatar_url ? (
+                  <img
+                    src={session.avatar_url}
+                    alt="Profile"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-orange-100 text-xs font-bold text-orange-700 select-none">
+                    {(session.name || 'U').charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </button>
               <Button variant="ghost" size="sm" className="rounded-lg" onClick={handleLogout}>
                 <LogOut className="h-4 w-4" />
                 Logout

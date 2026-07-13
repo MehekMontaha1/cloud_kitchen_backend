@@ -85,6 +85,9 @@ export async function PUT(request: NextRequest) {
       updated_at: new Date().toISOString(),
     };
 
+    // Preserve avatar_url if not explicitly changed via this route
+    // (avatar is updated via /api/users/avatar separately)
+
     if (body.latitude !== undefined && body.latitude !== null) {
       profileUpdates.latitude = body.latitude;
     }

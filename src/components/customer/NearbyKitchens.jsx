@@ -18,6 +18,7 @@ const NearbyKitchens = ({ foods, onOrder, onAskAI }) => {
           distance: food.distance,
           eta: food.eta,
           rating: food.rating,
+          avatar: food.sellerAvatar || null,
           itemCount: 0,
         };
       }
@@ -57,6 +58,16 @@ const NearbyKitchens = ({ foods, onOrder, onAskAI }) => {
               >
                 <ArrowLeft className="h-4 w-4" />
               </button>
+              {/* Seller avatar */}
+              <div className="relative shrink-0">
+                {selectedKitchen.avatar ? (
+                  <img src={selectedKitchen.avatar} alt={selectedKitchen.name} className="h-12 w-12 rounded-full object-cover ring-2 ring-orange-300 shadow" />
+                ) : (
+                  <div className="h-12 w-12 rounded-full bg-orange-100 ring-2 ring-orange-300 flex items-center justify-center text-lg font-bold text-orange-600 select-none">
+                    {selectedKitchen.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
               <div>
                 <div className="flex items-center gap-2">
                   <h2 className="text-xl font-bold text-slate-900">{selectedKitchen.name}</h2>
@@ -172,7 +183,21 @@ const NearbyKitchens = ({ foods, onOrder, onAskAI }) => {
                   </div>
 
                   <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-50 pt-3">
-                    <span className="text-sm font-bold text-slate-900">৳{item.price.toFixed(2)}</span>
+                    <div className="flex flex-col">
+                      {item.originalPrice && (
+                        <span className="text-[9px] text-slate-400 line-through">
+                          ৳{item.originalPrice.toFixed(2)}
+                        </span>
+                      )}
+                      <span className="text-sm font-bold text-slate-900 flex items-center gap-1">
+                        ৳{item.price.toFixed(2)}
+                        {item.flashDiscount && (
+                          <span className="text-[8px] font-bold text-rose-600 bg-rose-50 px-1 rounded animate-pulse shrink-0">
+                            {item.flashDiscount}% OFF
+                          </span>
+                        )}
+                      </span>
+                    </div>
                     <div className="flex items-center gap-1.5">
                       <Button
                         variant="secondary"
@@ -229,11 +254,19 @@ const NearbyKitchens = ({ foods, onOrder, onAskAI }) => {
               className="group cursor-pointer rounded-xl border border-slate-200 bg-white p-4 transition-all hover:border-orange-300 hover:shadow-md hover:-translate-y-0.5 flex flex-col justify-between h-36"
             >
               <div>
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="font-bold text-slate-800 text-sm group-hover:text-orange-600 transition-colors truncate max-w-[130px]">
+                <div className="flex items-center gap-2.5">
+                  {/* Seller avatar */}
+                  {kitchen.avatar ? (
+                    <img src={kitchen.avatar} alt={kitchen.name} className="h-9 w-9 rounded-full object-cover ring-2 ring-orange-200 shrink-0" />
+                  ) : (
+                    <div className="h-9 w-9 rounded-full bg-orange-50 ring-2 ring-orange-200 flex items-center justify-center text-sm font-bold text-orange-500 shrink-0 select-none">
+                      {kitchen.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <h3 className="font-bold text-slate-800 text-sm group-hover:text-orange-600 transition-colors truncate">
                     {kitchen.name}
                   </h3>
-                  <div className="flex items-center gap-0.5 text-xs font-semibold text-slate-600 shrink-0">
+                  <div className="flex items-center gap-0.5 text-xs font-semibold text-slate-600 shrink-0 ml-auto">
                     <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
                     {kitchen.rating || '0.0'}
                   </div>

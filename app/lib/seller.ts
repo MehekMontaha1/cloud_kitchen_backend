@@ -131,7 +131,7 @@ export async function getSellerOrders(sellerId: string) {
 }
 
 // 5. Publish flash offer
-export async function publishFlashOffer(sellerId: string, payload: { title: string; discount: number; duration: number }) {
+export async function publishFlashOffer(sellerId: string, payload: { title: string; discount: number; duration: number; item_ids?: string[] }) {
   try {
     const { data, error } = await supabaseAdmin
       .from('flash_offers')
@@ -140,6 +140,7 @@ export async function publishFlashOffer(sellerId: string, payload: { title: stri
         title: payload.title,
         discount: payload.discount,
         duration_minutes: payload.duration,
+        item_ids: payload.item_ids || null,
       })
       .select()
       .single();

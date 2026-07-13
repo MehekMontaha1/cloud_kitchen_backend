@@ -22,7 +22,7 @@ export async function getAreaFilteredFoods(customerLat: number, customerLng: num
       .from('menu_items')
       .select(`
         *,
-        seller:profiles!seller_id(id, full_name, shop_name, location, latitude, longitude)
+        seller:profiles!seller_id(id, full_name, shop_name, location, latitude, longitude, avatar_url)
       `)
       .eq('status', 'live');
 
@@ -84,6 +84,7 @@ export async function getAreaFilteredFoods(customerLat: number, customerLng: num
           sellerLat: sellerLat !== null ? sellerLat : customerLat,
           sellerLng: sellerLng !== null ? sellerLng : customerLng,
           stock: Number(item.stock || 0),
+          sellerAvatar: item.seller?.avatar_url || null,
         };
       })
       .filter((item: any) => item.distance <= maxRadiusKm);

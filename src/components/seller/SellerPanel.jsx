@@ -16,6 +16,8 @@ const SellerPanel = () => {
 
   const [draft, setDraft] = useState({ name: '', price: '', stock: '', description: '', category: 'Food' });
   const [offer, setOffer] = useState({ title: 'Lunch Rush Deal', discount: '20', duration: '45' });
+  const [selectedDealItems, setSelectedDealItems] = useState([]);
+  const [applyToAll, setApplyToAll] = useState(true);
   const [imageFile, setImageFile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -28,6 +30,9 @@ const SellerPanel = () => {
     lng: 90.4125,
     address: '',
   });
+  const [activeOffers, setActiveOffers] = useState([]);
+  const [editingOffer, setEditingOffer] = useState(null);
+  const [customOrders, setCustomOrders] = useState([]);
 
   const handleUpdateOrderStatus = async (orderId, newStatus) => {
     try {
@@ -119,10 +124,47 @@ const SellerPanel = () => {
     }
   };
 
+  const loadActiveOffers = async () => {
+    try {
+      const res = await fetch('/api/seller/offers');
+      if (res.ok) {
+        const result = await res.json();
+        if (result.success) setActiveOffers((result.data || []).filter(o => o.isActive));
+      }
+    } catch (err) {
+      console.error('Error loading active offers:', err);
+    }
+  };
+
+  const loadCustomOrders = async () => {
+    try {
+      const res = await fetch('/api/seller/orders');
+      if (res.ok) {
+        const result = await res.json();
+        if (result.success && result.data) {
+          const customs = result.data
+            .filter((o) => o.type === 'Custom')
+            .map((order) => ({
+              id: order.id,
+              customer: order.customer ? order.customer.full_name : 'Customer',
+              item: order.item_name,
+              value: Number(order.value),
+              status: order.status,
+              details: order.items?.[0] || {},
+              createdAt: order.created_at,
+            }));
+          setCustomOrders(customs);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading custom orders:', err);
+    }
+  };
+
   useEffect(() => {
     const fetchAllData = async () => {
       setLoading(true);
-      await Promise.all([loadProfile(), loadMenu(), loadOrders(), loadEarnings()]);
+      await Promise.all([loadProfile(), loadMenu(), loadOrders(), loadEarnings(), loadActiveOffers(), loadCustomOrders()]);
       setLoading(false);
     };
     fetchAllData();
@@ -282,17 +324,86 @@ const SellerPanel = () => {
           title: offer.title,
           discount: Number(offer.discount),
           duration: Number(offer.duration),
+          item_ids: applyToAll ? null : selectedDealItems,
         }),
       });
       if (res.ok) {
         alert('Flash offer published successfully!');
         setOffer({ title: '', discount: '', duration: '' });
+        setSelectedDealItems([]);
+        setApplyToAll(true);
+        await loadActiveOffers();
       } else {
         const errorData = await res.json();
         alert('Failed to publish offer: ' + (errorData.error || 'Unknown error'));
       }
     } catch (err) {
       console.error('Error publishing flash offer:', err);
+    }
+  };
+
+  // 4b. Delete an active flash offer
+  const deleteOffer = async (offerId) => {
+    if (!confirm('Delete this flash offer? It will no longer appear to customers.')) return;
+    try {
+      const res = await fetch(`/api/seller/offers?id=${offerId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setActiveOffers(prev => prev.filter(o => o.id !== offerId));
+      } else {
+        const errData = await res.json();
+        alert('Failed to delete: ' + (errData.error || 'Unknown error'));
+      }
+    } catch (err) {
+      console.error('Error deleting offer:', err);
+    }
+  };
+
+  // 4c. Save edits to an active flash offer
+  const saveEditOffer = async () => {
+    if (!editingOffer) return;
+    try {
+      const res = await fetch('/api/seller/offers', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: editingOffer.id,
+          title: editingOffer.title,
+          discount: Number(editingOffer.discount),
+          duration: Number(editingOffer.duration_minutes),
+        }),
+      });
+      if (res.ok) {
+        alert('Offer updated! Timer has been reset.');
+        setEditingOffer(null);
+        await loadActiveOffers();
+      } else {
+        const errData = await res.json();
+        alert('Failed to update: ' + (errData.error || 'Unknown error'));
+      }
+    } catch (err) {
+      console.error('Error editing offer:', err);
+    }
+  };
+
+  // 4d. Accept / reject a custom order
+  const handleCustomOrderAction = async (orderId, newStatus) => {
+    try {
+      const res = await fetch('/api/seller/orders', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, status: newStatus }),
+      });
+      if (res.ok) {
+        setCustomOrders(prev =>
+          prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o)
+        );
+        loadEarnings();
+      } else {
+        const errData = await res.json();
+        alert(errData.error || 'Failed to update custom order');
+      }
+    } catch (err) {
+      console.error('Error updating custom order:', err);
     }
   };
 
@@ -584,10 +695,70 @@ const SellerPanel = () => {
             <Input label="Discount %" value={offer.discount} onChange={(e) => setOffer((p) => ({ ...p, discount: e.target.value }))} />
             <Input label="Minutes" value={offer.duration} onChange={(e) => setOffer((p) => ({ ...p, duration: e.target.value }))} />
           </div>
+
+          <div className="mt-4 space-y-2">
+            <label className="block text-xs font-bold text-slate-700">Apply Offer To:</label>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 cursor-pointer">
+                <input
+                  type="radio"
+                  name="applyTo"
+                  checked={applyToAll}
+                  onChange={() => setApplyToAll(true)}
+                  className="accent-indigo-600"
+                />
+                All Menu Items
+              </label>
+              <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 cursor-pointer">
+                <input
+                  type="radio"
+                  name="applyTo"
+                  checked={!applyToAll}
+                  onChange={() => setApplyToAll(false)}
+                  className="accent-indigo-600"
+                />
+                Specific Items (Select 1 or 2)
+              </label>
+            </div>
+
+            {!applyToAll && (
+              <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3 grid gap-2 max-h-36 overflow-y-auto mt-2">
+                {menu.length === 0 ? (
+                  <p className="text-[10px] text-slate-400 italic">No menu items found. Create items first.</p>
+                ) : (
+                  menu.map((item) => {
+                    const isChecked = selectedDealItems.includes(item.id);
+                    return (
+                      <label key={item.id} className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              if (selectedDealItems.length >= 2) {
+                                alert("You can select up to 2 items for this flash sale.");
+                                  return;
+                              }
+                              setSelectedDealItems([...selectedDealItems, item.id]);
+                            } else {
+                              setSelectedDealItems(selectedDealItems.filter(id => id !== item.id));
+                            }
+                          }}
+                          className="rounded text-indigo-600 focus:ring-indigo-500 accent-indigo-600"
+                        />
+                        <span>{item.name} (৳{Number(item.price).toFixed(2)})</span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="mt-4 rounded-xl border border-orange-200 bg-orange-50 p-4">
             <Clock className="inline h-4 w-4 text-orange-600" />
             <span className="ml-2 text-sm font-medium text-orange-800">
-              {offer.title ? `${offer.title}: ${offer.discount}% off for ${offer.duration} minutes` : 'Preview offer details above'}
+              {offer.title ? `${offer.title}: ${offer.discount}% off for ${offer.duration} minutes (${applyToAll ? 'All items' : `${selectedDealItems.length} items selected`})` : 'Preview offer details above'}
             </span>
           </div>
           <Button className="mt-4" icon={<Save className="h-4 w-4" />} onClick={publishOffer}>Publish Offer</Button>
@@ -595,6 +766,168 @@ const SellerPanel = () => {
 
         <InboxMessaging userRole="seller" />
       </section>
+
+      {/* ── Active Flash Offers ── */}
+      {activeOffers.length > 0 && (
+        <Card>
+          <div className="mb-4 flex items-center gap-2">
+            <Megaphone className="h-5 w-5 text-orange-500" />
+            <h3 className="text-xl font-semibold text-slate-900">Active Flash Offers</h3>
+            <span className="bg-rose-100 text-rose-700 text-xs px-2 py-0.5 rounded-full font-bold animate-pulse">
+              {activeOffers.length} Live
+            </span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {activeOffers.map(activeOff => {
+              const minsLeft = Math.floor(activeOff.timeLeft / 60);
+              const secsLeft = activeOff.timeLeft % 60;
+              const isEditing = editingOffer?.id === activeOff.id;
+              return (
+                <div key={activeOff.id} className="rounded-xl border border-orange-200 bg-orange-50/40 p-4 space-y-3">
+                  {isEditing ? (
+                    <>
+                      <input
+                        className="w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm"
+                        value={editingOffer.title}
+                        onChange={e => setEditingOffer(p => ({ ...p, title: e.target.value }))}
+                        placeholder="Offer title"
+                      />
+                      <div className="flex gap-2">
+                        <input
+                          className="w-1/2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm"
+                          value={editingOffer.discount}
+                          onChange={e => setEditingOffer(p => ({ ...p, discount: e.target.value }))}
+                          placeholder="Discount %"
+                          type="number"
+                        />
+                        <input
+                          className="w-1/2 rounded-lg border border-slate-200 px-3 py-1.5 text-sm"
+                          value={editingOffer.duration_minutes}
+                          onChange={e => setEditingOffer(p => ({ ...p, duration_minutes: e.target.value }))}
+                          placeholder="Minutes"
+                          type="number"
+                        />
+                      </div>
+                      <p className="text-[10px] text-amber-700 italic">Saving will reset the countdown timer.</p>
+                      <div className="flex gap-2">
+                        <button onClick={saveEditOffer} className="flex-1 rounded-lg bg-emerald-600 text-white text-xs font-bold py-1.5 hover:bg-emerald-700 transition-colors">Save</button>
+                        <button onClick={() => setEditingOffer(null)} className="flex-1 rounded-lg bg-slate-200 text-slate-700 text-xs font-bold py-1.5 hover:bg-slate-300 transition-colors">Cancel</button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-bold text-slate-900 text-sm">{activeOff.title}</p>
+                          <p className="text-xs text-slate-500 mt-0.5">{activeOff.discount}% OFF · {activeOff.item_ids ? `${(activeOff.item_ids || []).length} specific items` : 'All items'}</p>
+                        </div>
+                        <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-full shrink-0 animate-pulse">
+                          {minsLeft}m {secsLeft}s left
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setEditingOffer({ ...activeOff })}
+                          className="flex-1 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 text-xs font-bold py-1.5 hover:bg-indigo-100 transition-colors flex items-center justify-center gap-1"
+                        >
+                          <Edit3 className="h-3 w-3" /> Edit
+                        </button>
+                        <button
+                          onClick={() => deleteOffer(activeOff.id)}
+                          className="flex-1 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 text-xs font-bold py-1.5 hover:bg-rose-100 transition-colors"
+                        >
+                          🗑 Delete
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
+      {/* ── Custom Order Requests ── */}
+      <Card>
+        <div className="mb-5 flex items-center gap-2">
+          <ReceiptText className="h-5 w-5 text-indigo-500" />
+          <h3 className="text-xl font-semibold text-slate-900">Custom Order Requests</h3>
+          <span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full font-bold">
+            {customOrders.filter(o => o.status === 'Pending').length} Pending
+          </span>
+        </div>
+        {customOrders.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 py-10 text-center">
+            <ReceiptText className="mx-auto h-8 w-8 text-slate-300 mb-2" />
+            <p className="text-sm text-slate-400">No custom order requests yet.</p>
+            <p className="text-xs text-slate-300 mt-1">When customers send special food requests, they appear here.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {customOrders.map(co => {
+              const isPending = co.status === 'Pending';
+              const isActive = co.status === 'Preparing' || co.status === 'Ready';
+              const isRejected = co.status === 'Cancelled';
+              return (
+                <div key={co.id} className={`rounded-xl border p-4 ${
+                  isPending ? 'border-amber-200 bg-amber-50/30'
+                  : isRejected ? 'border-rose-100 bg-rose-50/20 opacity-60'
+                  : 'border-emerald-200 bg-emerald-50/20'
+                }`}>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="space-y-1 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-bold text-slate-900 text-sm">{co.item || 'Custom Food Request'}</p>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                          isPending ? 'bg-amber-100 text-amber-800'
+                          : isRejected ? 'bg-rose-100 text-rose-800'
+                          : 'bg-emerald-100 text-emerald-800'
+                        }`}>{co.status}</span>
+                      </div>
+                      <p className="text-xs text-slate-500">From: <span className="font-semibold text-slate-700">{co.customer}</span></p>
+                      {co.details?.description && (
+                        <p className="text-xs text-slate-500 italic line-clamp-2">"{co.details.description}"</p>
+                      )}
+                      <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-slate-400 font-medium">
+                        {co.details?.cuisine && <span>Cuisine: {co.details.cuisine}</span>}
+                        {co.details?.urgency && <span>Urgency: {co.details.urgency}</span>}
+                        <span className="text-indigo-600 font-bold">Budget: ৳{co.value?.toFixed(2)}</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      {isPending && (
+                        <>
+                          <button
+                            onClick={() => handleCustomOrderAction(co.id, 'Preparing')}
+                            className="rounded-lg bg-emerald-600 text-white text-xs font-bold px-3 py-1.5 hover:bg-emerald-700 transition-colors"
+                          >
+                            ✓ Accept
+                          </button>
+                          <button
+                            onClick={() => handleCustomOrderAction(co.id, 'Cancelled')}
+                            className="rounded-lg border border-rose-300 text-rose-700 text-xs font-bold px-3 py-1.5 hover:bg-rose-50 transition-colors"
+                          >
+                            ✕ Reject
+                          </button>
+                        </>
+                      )}
+                      {isActive && (
+                        <button
+                          onClick={() => handleCustomOrderAction(co.id, 'Ready')}
+                          className="rounded-lg bg-indigo-600 text-white text-xs font-bold px-3 py-1.5 hover:bg-indigo-700 transition-colors"
+                        >
+                          Mark Ready
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
 
       {/* Cloud Kitchen Physical Location Map */}
       <Card>

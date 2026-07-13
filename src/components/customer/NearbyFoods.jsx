@@ -310,7 +310,21 @@ const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLo
               </div>
 
               <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-lg font-semibold text-slate-900">{formatPrice(item.price)}</span>
+                <div className="flex flex-col">
+                  {item.originalPrice && (
+                    <span className="text-[10px] text-slate-400 line-through">
+                      {formatPrice(item.originalPrice)}
+                    </span>
+                  )}
+                  <span className="text-lg font-semibold text-slate-900 flex items-center gap-1">
+                    {formatPrice(item.price)}
+                    {item.flashDiscount && (
+                      <span className="text-[9px] font-bold text-rose-600 bg-rose-50 px-1 rounded animate-pulse shrink-0">
+                        {item.flashDiscount}% OFF
+                      </span>
+                    )}
+                  </span>
+                </div>
                 <div className="flex items-center gap-1.5">
                   <Button
                     variant="secondary"

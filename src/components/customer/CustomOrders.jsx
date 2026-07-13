@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, Button, Input, Textarea, Select } from '../common';
 
 const cuisines = [
@@ -17,8 +17,24 @@ const urgency = [
   { value: 'asap', label: 'ASAP' },
 ];
 
-const CustomOrders = ({ onSubmit }) => {
+const CustomOrders = ({ foods = [], onSubmit }) => {
+  // Extract unique kitchens from nearby foods to direct the custom order request
+  const kitchens = useMemo(() => {
+    const map = {};
+    foods.forEach((food) => {
+      const sId = food.sellerId;
+      if (sId && !map[sId]) {
+        map[sId] = {
+          value: sId,
+          label: food.seller,
+        };
+      }
+    });
+    return Object.values(map);
+  }, [foods]);
+
   const [form, setForm] = useState({
+    sellerId: '',
     name: '',
     description: '',
     location: '',
@@ -27,22 +43,29 @@ const CustomOrders = ({ onSubmit }) => {
     urgency: 'standard',
     budget: '',
   });
+
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState(null);
 
   const handleChange = (field) => (e) => {
     setForm((prev) => ({ ...prev, [field]: e.target.value }));
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: null }));
     }
+    setSubmitError(null);
   };
 
   const validate = () => {
     const newErrors = {};
+    if (!form.sellerId) newErrors.sellerId = 'Please select a kitchen';
     if (!form.name.trim()) newErrors.name = 'Food name is required';
     if (!form.description.trim()) newErrors.description = 'Description is required';
     if (!form.location.trim()) newErrors.location = 'Delivery location is required';
+    if (!form.budget.trim() || isNaN(Number(form.budget)) || Number(form.budget) <= 0) {
+      newErrors.budget = 'Please enter a valid budget';
+    }
     return newErrors;
   };
 
@@ -56,25 +79,56 @@ const CustomOrders = ({ onSubmit }) => {
     }
 
     setIsSubmitting(true);
-    
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    onSubmit(form);
-    setIsSubmitting(false);
-    setShowSuccess(true);
-    
-    setTimeout(() => {
-      setShowSuccess(false);
-      setForm({
-        name: '',
-        description: '',
-        location: '',
-        note: '',
-        cuisine: 'any',
-        urgency: 'standard',
-        budget: '',
+    setSubmitError(null);
+
+    try {
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          seller_id: form.sellerId,
+          item_name: form.name,
+          value: Number(form.budget),
+          delivery_address: form.location,
+          type: 'Custom',
+          items: [{
+            name: form.name,
+            description: form.description,
+            note: form.note,
+            cuisine: form.cuisine,
+            urgency: form.urgency,
+            budget: Number(form.budget),
+          }],
+        }),
       });
-    }, 2000);
+
+      if (res.ok) {
+        const result = await res.json();
+        setShowSuccess(true);
+        if (onSubmit) onSubmit(result.data);
+        
+        setTimeout(() => {
+          setShowSuccess(false);
+          setForm({
+            sellerId: '',
+            name: '',
+            description: '',
+            location: '',
+            note: '',
+            cuisine: 'any',
+            urgency: 'standard',
+            budget: '',
+          });
+        }, 2000);
+      } else {
+        const errData = await res.json();
+        setSubmitError(errData.error || 'Failed to place custom order request');
+      }
+    } catch (err) {
+      setSubmitError('An error occurred. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -82,12 +136,25 @@ const CustomOrders = ({ onSubmit }) => {
       <div className="mb-6">
         <h2 className="text-xl font-semibold text-slate-900">Custom Orders</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Request food from distant sellers or special menu items not listed on the platform.
+          Request custom/special menu items from nearby kitchens not listed on the platform.
         </p>
       </div>
 
+      {submitError && (
+        <div className="rounded-lg bg-rose-50 border border-rose-200 p-2.5 text-xs text-rose-800 font-medium mb-4">
+          ❌ {submitError}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid gap-6 md:grid-cols-2">
+          <Select
+            label="Select Target Kitchen"
+            options={[{ value: '', label: 'Choose a Kitchen...' }, ...kitchens]}
+            value={form.sellerId}
+            onChange={handleChange('sellerId')}
+            error={errors.sellerId}
+          />
           <Input
             label="Food Name"
             placeholder="What would you like to eat?"
@@ -95,15 +162,16 @@ const CustomOrders = ({ onSubmit }) => {
             onChange={handleChange('name')}
             error={errors.name}
           />
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-3">
           <Input
-            label="Budget (optional)"
+            label="Budget (৳)"
             placeholder="৳0.00"
             value={form.budget}
             onChange={handleChange('budget')}
+            error={errors.budget}
           />
-        </div>
-
-        <div className="grid gap-6 md:grid-cols-2">
           <Select
             label="Preferred Cuisine"
             options={cuisines}
@@ -121,7 +189,7 @@ const CustomOrders = ({ onSubmit }) => {
         <Textarea
           label="Description"
           placeholder="Describe the dish, ingredients, style, or any specific requirements..."
-          rows={4}
+          rows={3}
           value={form.description}
           onChange={handleChange('description')}
           error={errors.description}
@@ -154,7 +222,7 @@ const CustomOrders = ({ onSubmit }) => {
             <svg className="inline h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            Custom orders may take longer and have delivery surcharges.
+            Custom orders require seller review and approval.
           </div>
           <Button
             type="submit"
@@ -164,7 +232,7 @@ const CustomOrders = ({ onSubmit }) => {
           >
             {showSuccess ? (
               <>
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg className="h-4 w-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
                 Request Sent!
