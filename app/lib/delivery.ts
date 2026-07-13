@@ -29,6 +29,7 @@ export async function getAvailableOrdersForRider(riderId: string) {
       `)
       .is('delivery_partner_id', null)
       .eq('status', 'Ready') // only orders marked as Ready by the seller are deliverable
+      .eq('payment_status', 'paid')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -68,6 +69,7 @@ export async function getAcceptedOrdersForRider(riderId: string) {
         customer:profiles!customer_id(full_name, email, location, latitude, longitude)
       `)
       .eq('delivery_partner_id', riderId)
+      .eq('payment_status', 'paid')
       .order('created_at', { ascending: false });
 
     if (error) throw error;

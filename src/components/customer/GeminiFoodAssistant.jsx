@@ -14,16 +14,18 @@ const GeminiFoodAssistant = ({ activeFoodItem, onClearActiveFood }) => {
   ]);
   const [loading, setLoading] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState(null);
-  const messagesEndRef = useRef(null);
+  const scrollContainerRef = useRef(null);
 
   useEffect(() => {
     if (activeFoodItem) {
-      setPrompt(`Can I eat ${activeFoodItem.name} for lunch? Is it healthy based on ingredients: ${activeFoodItem.description}?`);
+      setPrompt(`Should I eat ${activeFoodItem.name}? Is it healthy based on the description: ${activeFoodItem.description || 'not specified'}?`);
     }
   }, [activeFoodItem]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+    }
   }, [messages, loading]);
 
   const handleAskAI = async (customPrompt) => {
@@ -80,8 +82,8 @@ const GeminiFoodAssistant = ({ activeFoodItem, onClearActiveFood }) => {
   };
 
   const quickPrompts = [
-    'Can I eat this item for lunch?',
-    'Is this food healthy for dinner?',
+    'Should I eat this item?',
+    'Is this food healthy to eat?',
     'What ingredients are used in this item?',
     'Is this item high protein or good for workout?',
   ];
@@ -144,7 +146,7 @@ const GeminiFoodAssistant = ({ activeFoodItem, onClearActiveFood }) => {
       </div>
 
       {/* Messages Scroll Area */}
-      <div className="h-80 overflow-y-auto p-4 space-y-4 bg-slate-50/30">
+      <div ref={scrollContainerRef} className="h-80 overflow-y-auto p-4 space-y-4 bg-slate-50/30">
         {messages.map((msg, idx) => {
           const isUser = msg.from === 'user';
           return (
@@ -196,7 +198,6 @@ const GeminiFoodAssistant = ({ activeFoodItem, onClearActiveFood }) => {
             </div>
           </div>
         )}
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Input Area */}

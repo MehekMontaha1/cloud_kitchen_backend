@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
     const priceStr = formData.get('price') as string;
     const stockStr = formData.get('stock') as string;
     const description = (formData.get('description') as string) || '';
+    const category = (formData.get('category') as string) || 'Food';
     const file = formData.get('file') as File | null;
 
     if (!name || !priceStr) {
@@ -118,6 +119,7 @@ export async function POST(request: NextRequest) {
       price: price,
       stock: stock,
       description: description,
+      category: category,
       image_url: imageUrl || undefined,
     });
 

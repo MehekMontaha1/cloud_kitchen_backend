@@ -18,6 +18,7 @@ import {
   InboxMessaging,
   SupportChatbot,
   OrderTracking,
+  NearbyKitchens,
 } from './components/customer';
 import GeminiFoodAssistant from './components/customer/GeminiFoodAssistant';
 import LandingPage from './components/landing/LandingPage';
@@ -62,6 +63,30 @@ function App() {
     lng: 90.4125,
     address: 'Dhaka, Bangladesh',
   });
+  const [paymentStatusMessage, setPaymentStatusMessage] = useState(null);
+  const [customerOrders, setCustomerOrders] = useState([]);
+  const [activeTrackingOrderId, setActiveTrackingOrderId] = useState(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        return localStorage.getItem('activeTrackingOrderId') || null;
+      }
+    } catch (e) {
+      console.warn('localStorage is not available:', e);
+    }
+    return null;
+  });
+
+  useEffect(() => {
+    try {
+      if (activeTrackingOrderId) {
+        localStorage.setItem('activeTrackingOrderId', activeTrackingOrderId);
+      } else {
+        localStorage.removeItem('activeTrackingOrderId');
+      }
+    } catch (e) {
+      console.warn('localStorage write failed:', e);
+    }
+  }, [activeTrackingOrderId]);
 
   const loadCustomerData = async () => {
     try {
@@ -107,6 +132,15 @@ function App() {
           setChatMessages(msgDataResult.data || []);
         }
       }
+
+      // 5. Load Customer Orders from backend API
+      const ordersRes = await fetch('/api/orders');
+      if (ordersRes.ok) {
+        const ordersDataResult = await ordersRes.json();
+        if (ordersDataResult.success) {
+          setCustomerOrders(ordersDataResult.data || []);
+        }
+      }
     } catch (err) {
       console.error('Error loading customer backend data:', err);
     }
@@ -121,6 +155,22 @@ function App() {
   const visibleFoods = useMemo(() => {
     return realFoods;
   }, [realFoods]);
+
+  const trackingOrders = useMemo(() => {
+    return customerOrders.filter((order) => {
+      const createdTime = new Date(order.created_at);
+      const ageMins = (Date.now() - createdTime.getTime()) / 60000;
+
+      const isCompleted = order.status === 'Delivered' || order.status === 'Cancelled';
+      if (isCompleted) {
+        // Only show completed orders for up to 60 minutes (1 hour)
+        return ageMins <= 60;
+      }
+
+      // Always show active (uncompleted) orders
+      return true;
+    });
+  }, [customerOrders]);
 
 
 
@@ -215,6 +265,47 @@ function App() {
     }
   }, [session]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get('payment');
+    const sessionId = params.get('session_id');
+    const orderId = params.get('order_id');
+
+    if (payment === 'success' && sessionId && orderId) {
+      setPaymentStatusMessage({ status: 'confirming', message: 'Verifying payment with Stripe...' });
+
+      fetch('/api/payment/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId, order_id: orderId }),
+      })
+        .then(async (res) => {
+          if (res.ok) {
+            setPaymentStatusMessage({ status: 'success', message: 'Payment Successful! Your order has been placed.' });
+            const firstOrderId = orderId.split(',')[0];
+            setActiveTrackingOrderId(firstOrderId);
+            setCartItems([]);
+            // Clear URL params
+            window.history.replaceState({}, document.title, window.location.pathname);
+            
+            // Reload customer dashboard data to show the new paid order
+            if (session?.role === 'customer') {
+              loadCustomerData();
+            }
+          } else {
+            const data = await res.json().catch(() => ({}));
+            setPaymentStatusMessage({ status: 'error', message: data.error || 'Failed to verify payment. Please contact support.' });
+          }
+        })
+        .catch(() => {
+          setPaymentStatusMessage({ status: 'error', message: 'Error verifying payment.' });
+        });
+    } else if (payment === 'cancel') {
+      setPaymentStatusMessage({ status: 'cancel', message: 'Payment cancelled. Your order was not placed.' });
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [session]);
+
   const goTop = () => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
   };
@@ -272,6 +363,11 @@ function App() {
   };
 
   const handleOrder = (item) => {
+    const existingCount = cartItems.filter(i => i.id === item.id).length;
+    if (existingCount >= item.stock) {
+      alert(`Cannot add more! Only ${item.stock} unit(s) of "${item.name}" available in stock.`);
+      return;
+    }
     setCartItems((prev) => [...prev, item]);
   };
 
@@ -295,38 +391,81 @@ function App() {
     setMessages((prev) => prev.filter((message) => message.id !== id));
   };
 
-  const [activeTrackingOrderId, setActiveTrackingOrderId] = useState(null);
 
   const handleCheckout = async () => {
     if (cartItems.length === 0) return;
-    const firstItem = cartItems[0];
     const totalVal = cartItems.reduce((sum, item) => sum + item.price, 0) + 2.99;
 
     try {
-      const res = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          seller_id: firstItem.sellerId || session?.id,
-          item_name: cartItems.map(i => i.name).join(', '),
-          value: totalVal,
-          delivery_address: customerLocation.address || 'Dhaka, Bangladesh',
-          delivery_latitude: customerLocation.lat,
-          delivery_longitude: customerLocation.lng,
-        }),
+      // 1. Group items by sellerId
+      const groups = {};
+      cartItems.forEach((item) => {
+        const sId = item.sellerId || session?.id || 'default';
+        if (!groups[sId]) groups[sId] = [];
+        groups[sId].push(item);
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        const newOrderId = data.data?.id || 'ORD-' + Math.floor(1000 + Math.random() * 9000);
-        setCartItems([]);
-        setActiveTrackingOrderId(newOrderId);
-      } else {
-        // Fallback to tracking UI on demo
-        const demoId = 'ORD-' + Math.floor(1000 + Math.random() * 9000);
-        setCartItems([]);
-        setActiveTrackingOrderId(demoId);
+      const sellerIds = Object.keys(groups);
+
+      // 2. Create an order for each seller group
+      const orderPromises = sellerIds.map(async (sId, index) => {
+        const items = groups[sId];
+        const itemsPrice = items.reduce((sum, item) => sum + item.price, 0);
+        // Distribute the 2.99 delivery fee to the first order only to keep the overall sum exact
+        const shareOfDelivery = index === 0 ? 2.99 : 0;
+        const orderValue = itemsPrice + shareOfDelivery;
+
+        const res = await fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            seller_id: sId === 'default' ? session?.id : sId,
+            item_name: items.map(i => i.name).join(', '),
+            value: orderValue,
+            delivery_address: customerLocation.address || 'Dhaka, Bangladesh',
+            delivery_latitude: customerLocation.lat,
+            delivery_longitude: customerLocation.lng,
+            items: items.map(i => ({ id: i.id, name: i.name })),
+          }),
+        });
+
+        if (res.ok) {
+          const orderData = await res.json();
+          return orderData.data?.id;
+        }
+        throw new Error('Failed to create sub-order');
+      });
+
+      const createdOrderIds = (await Promise.all(orderPromises)).filter(Boolean);
+      const orderIdsStr = createdOrderIds.join(',');
+
+      if (createdOrderIds.length > 0) {
+        // 3. Initialize Stripe checkout session for all orders combined
+        const sessionRes = await fetch('/api/payment/create-checkout-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            order_id: orderIdsStr,
+            value: totalVal,
+            item_name: cartItems.map(i => i.name).join(', '),
+            origin: window.location.origin,
+          }),
+        });
+
+        if (sessionRes.ok) {
+          const sessionData = await sessionRes.json();
+          if (sessionData.url) {
+            // Redirect customer to Stripe payment page
+            window.location.href = sessionData.url;
+            return;
+          }
+        }
       }
+
+      // Fallback if Stripe creation fails
+      const fallbackId = createdOrderIds[0] || 'ORD-' + Math.floor(1000 + Math.random() * 9000);
+      setCartItems([]);
+      setActiveTrackingOrderId(fallbackId);
     } catch (err) {
       console.error('Error placing order:', err);
       const demoId = 'ORD-' + Math.floor(1000 + Math.random() * 9000);
@@ -375,6 +514,43 @@ function App() {
         </Badge>
       </section>
 
+      {paymentStatusMessage && (
+        <div className={`p-4 rounded-xl border flex items-center justify-between gap-3 text-xs sm:text-sm font-medium shadow-xs transition-all ${
+          paymentStatusMessage.status === 'confirming'
+            ? 'bg-blue-50 border-blue-200 text-blue-800'
+            : paymentStatusMessage.status === 'success'
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-800 animate-pulse'
+            : paymentStatusMessage.status === 'cancel'
+            ? 'bg-amber-50 border-amber-200 text-amber-800'
+            : 'bg-rose-50 border-rose-200 text-rose-800'
+        }`}>
+          <div className="flex items-center gap-2">
+            {paymentStatusMessage.status === 'confirming' && (
+              <svg className="animate-spin h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            )}
+            {paymentStatusMessage.status === 'success' && (
+              <span className="text-emerald-600 text-base">✅</span>
+            )}
+            {paymentStatusMessage.status === 'cancel' && (
+              <span className="text-amber-600 text-base">⚠️</span>
+            )}
+            {paymentStatusMessage.status === 'error' && (
+              <span className="text-rose-600 text-base">❌</span>
+            )}
+            <span>{paymentStatusMessage.message}</span>
+          </div>
+          <button 
+            onClick={() => setPaymentStatusMessage(null)}
+            className="text-slate-400 hover:text-slate-600 font-bold px-2 py-1 rounded hover:bg-slate-100/50"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Active Live Order Tracking Banner / Modal */}
       {activeTrackingOrderId && (
         <OrderTracking
@@ -382,6 +558,95 @@ function App() {
           onClose={() => setActiveTrackingOrderId(null)}
         />
       )}
+
+      {/* Track Your Orders Section */}
+      {trackingOrders.length > 0 && (
+        <section className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs">
+          <div className="flex items-center gap-2 mb-4">
+            <span className="text-orange-500 text-lg">📦</span>
+            <h3 className="text-base font-bold text-slate-900">Track Your Orders</h3>
+            <span className="bg-orange-100 text-orange-700 text-xs px-2 py-0.5 rounded-full font-bold">
+              {trackingOrders.length}
+            </span>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {trackingOrders.map((order) => {
+              const createdTime = new Date(order.created_at);
+              const ageMins = isNaN(createdTime.getTime()) 
+                ? 0 
+                : Math.round((Date.now() - createdTime.getTime()) / 60000);
+              const isCompleted = order.status === 'Delivered' || order.status === 'Cancelled';
+              const isDelayed = !isCompleted && ageMins > 45;
+              const isValidDate = !isNaN(createdTime.getTime());
+              const timeString = isValidDate 
+                ? createdTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : 'Unknown time';
+
+              return (
+                <div
+                  key={order.id}
+                  className={`border rounded-xl p-4 flex flex-col justify-between transition-all hover:shadow-xs bg-slate-50/50 ${
+                    isDelayed ? 'border-amber-300 bg-amber-50/10' : 'border-slate-200'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        Order status
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        isCompleted
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : order.status === 'Ready' || order.status === 'Picked Up'
+                          ? 'bg-blue-100 text-blue-800 animate-pulse'
+                          : 'bg-orange-100 text-orange-800'
+                      }`}>
+                        {order.status}
+                      </span>
+                    </div>
+
+                    <h4 className="font-bold text-slate-800 text-sm truncate">{order.item_name}</h4>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Kitchen: <strong>{order.seller?.shop_name || 'Cloud Kitchen'}</strong>
+                    </p>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Placed: {timeString} ({ageMins} mins ago)
+                    </p>
+
+                    {/* Delayed Warning */}
+                    {isDelayed && (
+                      <p className="text-[11px] text-amber-700 bg-amber-100/50 rounded-lg p-2 mt-2 font-medium flex items-center gap-1">
+                        ⚠️ Order is not complete (Delayed)
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="border-t border-slate-100 mt-3 pt-3 flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-900">৳{order.value}</span>
+                    <button
+                      onClick={() => setActiveTrackingOrderId(order.id)}
+                      className="text-xs font-bold text-orange-600 hover:text-orange-800 bg-orange-50 hover:bg-orange-100/80 px-3.5 py-1.5 rounded-lg transition-all"
+                    >
+                      Track Live 🗺️
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      <NearbyKitchens
+        foods={visibleFoods}
+        onOrder={handleOrder}
+        onAskAI={(item) => {
+          setActiveAiFoodItem(item);
+          const el = document.getElementById('gemini-food-assistant-section');
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }}
+      />
 
       <NearbyFoods
         foods={visibleFoods}

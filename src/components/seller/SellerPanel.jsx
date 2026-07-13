@@ -7,9 +7,6 @@ import InboxMessaging from '../customer/InboxMessaging';
 const SellerPanel = () => {
   const [menu, setMenu] = useState([]);
   const [orders, setOrders] = useState([]);
-  const [messages, setMessages] = useState([]);
-  const [replyText, setReplyText] = useState('');
-  const [sendingMsg, setSendingMsg] = useState(false);
   const [earnings, setEarnings] = useState([
     { label: 'Today', value: '৳0.00', delta: '+0%' },
     { label: 'This Week', value: '৳0.00', delta: '+0%' },
@@ -17,11 +14,15 @@ const SellerPanel = () => {
     { label: 'Total Sales', value: '৳0.00', delta: '+0%' }
   ]);
 
-  const [draft, setDraft] = useState({ name: '', price: '', stock: '', description: '' });
+  const [draft, setDraft] = useState({ name: '', price: '', stock: '', description: '', category: 'Food' });
   const [offer, setOffer] = useState({ title: 'Lunch Rush Deal', discount: '20', duration: '45' });
   const [imageFile, setImageFile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
+  const [editDraft, setEditDraft] = useState({ name: '', price: '', stock: '', description: '', category: 'Food' });
+  const [editImageFile, setEditImageFile] = useState(null);
+  const [updatingItem, setUpdatingItem] = useState(false);
   const [kitchenLocation, setKitchenLocation] = useState({
     lat: 23.8103,
     lng: 90.4125,
@@ -47,30 +48,6 @@ const SellerPanel = () => {
       }
     } catch (err) {
       console.error('Error updating seller order status:', err);
-    }
-  };
-
-  const handleSendReply = async () => {
-    if (!replyText.trim()) return;
-    setSendingMsg(true);
-    try {
-      const res = await fetch('/api/seller/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: replyText.trim() }),
-      });
-
-      if (res.ok) {
-        setReplyText('');
-        loadMessages();
-      } else {
-        const errData = await res.json();
-        alert(errData.error || 'Failed to send message');
-      }
-    } catch (err) {
-      console.error('Error sending seller message:', err);
-    } finally {
-      setSendingMsg(false);
     }
   };
 
@@ -130,27 +107,6 @@ const SellerPanel = () => {
     }
   };
 
-  const loadMessages = async () => {
-    try {
-      const res = await fetch('/api/seller/messages');
-      if (res.ok) {
-        const result = await res.json();
-        if (result.success && result.data) {
-          const mappedMessages = result.data.map((msg) => ({
-            id: msg.id,
-            from: msg.sender ? msg.sender.full_name : 'User',
-            text: msg.text,
-            unread: msg.unread,
-            time: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          }));
-          setMessages(mappedMessages);
-        }
-      }
-    } catch (err) {
-      console.error('Error loading messages:', err);
-    }
-  };
-
   const loadEarnings = async () => {
     try {
       const res = await fetch('/api/seller/earnings');
@@ -166,7 +122,7 @@ const SellerPanel = () => {
   useEffect(() => {
     const fetchAllData = async () => {
       setLoading(true);
-      await Promise.all([loadProfile(), loadMenu(), loadOrders(), loadMessages(), loadEarnings()]);
+      await Promise.all([loadProfile(), loadMenu(), loadOrders(), loadEarnings()]);
       setLoading(false);
     };
     fetchAllData();
@@ -184,6 +140,7 @@ const SellerPanel = () => {
       formData.append('price', draft.price);
       formData.append('stock', draft.stock || '50');
       formData.append('description', draft.description || '');
+      formData.append('category', draft.category || 'Food');
       if (imageFile) {
         formData.append('file', imageFile);
       }
@@ -197,7 +154,7 @@ const SellerPanel = () => {
         const result = await res.json();
         if (result.success && result.data) {
           setMenu((prev) => [result.data, ...prev]);
-          setDraft({ name: '', price: '', stock: '', description: '' });
+          setDraft({ name: '', price: '', stock: '', description: '', category: 'Food' });
           setImageFile(null);
           const fileInput = document.getElementById('menu-item-image');
           if (fileInput) fileInput.value = '';
@@ -252,6 +209,65 @@ const SellerPanel = () => {
       }
     } catch (err) {
       console.error('Error deleting menu item:', err);
+    }
+  };
+
+  // 3.7 Editing menu items handler
+  const startEdit = (item) => {
+    setEditingItem(item.id);
+    setEditDraft({
+      name: item.name,
+      price: item.price.toString(),
+      stock: item.stock.toString(),
+      description: item.description || '',
+      category: item.category || 'Food'
+    });
+    setEditImageFile(null);
+  };
+
+  const cancelEdit = () => {
+    setEditingItem(null);
+    setEditDraft({ name: '', price: '', stock: '', description: '', category: 'Food' });
+    setEditImageFile(null);
+  };
+
+  const handleUpdateItem = async (event) => {
+    event.preventDefault();
+    if (!editDraft.name || !editDraft.price) return;
+    setUpdatingItem(true);
+    try {
+      const formData = new FormData();
+      formData.append('name', editDraft.name);
+      formData.append('price', editDraft.price);
+      formData.append('stock', editDraft.stock || '50');
+      formData.append('description', editDraft.description || '');
+      formData.append('category', editDraft.category || 'Food');
+      if (editImageFile) {
+        formData.append('file', editImageFile);
+      }
+
+      const res = await fetch(`/api/seller/menu/${editingItem}`, {
+        method: 'PUT',
+        body: formData,
+      });
+
+      if (res.ok) {
+        const result = await res.json();
+        if (result.success && result.data) {
+          setMenu((prev) =>
+            prev.map((item) => (item.id === editingItem ? result.data : item))
+          );
+          cancelEdit();
+          loadEarnings();
+        }
+      } else {
+        const errorData = await res.json();
+        alert('Failed to update menu item: ' + (errorData.error || 'Unknown error'));
+      }
+    } catch (err) {
+      console.error('Error updating menu item:', err);
+    } finally {
+      setUpdatingItem(false);
     }
   };
 
@@ -316,10 +332,22 @@ const SellerPanel = () => {
           </div>
 
           <form onSubmit={addItem} className="mb-5 space-y-4">
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-4">
               <Input placeholder="Item name" value={draft.name} onChange={(e) => setDraft((p) => ({ ...p, name: e.target.value }))} />
               <Input placeholder="Stock" type="number" value={draft.stock} onChange={(e) => setDraft((p) => ({ ...p, stock: e.target.value }))} />
               <Input placeholder="Price" value={draft.price} onChange={(e) => setDraft((p) => ({ ...p, price: e.target.value }))} />
+              <select
+                value={draft.category}
+                onChange={(e) => setDraft((p) => ({ ...p, category: e.target.value }))}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
+              >
+                <option value="Food">Food (Other)</option>
+                <option value="Rice">Rice</option>
+                <option value="Fast Food">Fast Food</option>
+                <option value="Curry">Curry</option>
+                <option value="Cake">Cake & Desserts</option>
+                <option value="Drinks">Drinks</option>
+              </select>
             </div>
             <div>
               <textarea
@@ -351,39 +379,114 @@ const SellerPanel = () => {
             {menu.length === 0 ? (
               <p className="text-center py-4 text-sm text-slate-400">No menu items found. Add your first item above.</p>
             ) : (
-              menu.map((item) => (
-                <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4">
-                  <div className="flex items-start gap-4">
-                    {item.image_url ? (
-                      <img src={item.image_url} alt={item.name} className="h-12 w-12 rounded-xl object-cover border border-slate-100" />
-                    ) : (
-                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
-                        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
+              menu.map((item) => {
+                if (editingItem === item.id) {
+                  return (
+                    <form key={item.id} onSubmit={handleUpdateItem} className="rounded-xl border border-orange-300 bg-orange-50/20 p-4 space-y-4">
+                      <div className="grid gap-3 sm:grid-cols-4">
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-500 mb-1">Item Name</label>
+                          <Input placeholder="Item name" value={editDraft.name} onChange={(e) => setEditDraft((p) => ({ ...p, name: e.target.value }))} />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-500 mb-1">Stock</label>
+                          <Input placeholder="Stock" type="number" value={editDraft.stock} onChange={(e) => setEditDraft((p) => ({ ...p, stock: e.target.value }))} />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-500 mb-1">Price (৳)</label>
+                          <Input placeholder="Price" value={editDraft.price} onChange={(e) => setEditDraft((p) => ({ ...p, price: e.target.value }))} />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-semibold text-slate-500 mb-1">Category</label>
+                          <select
+                            value={editDraft.category}
+                            onChange={(e) => setEditDraft((p) => ({ ...p, category: e.target.value }))}
+                            className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100"
+                          >
+                            <option value="Food">Food (Other)</option>
+                            <option value="Rice">Rice</option>
+                            <option value="Fast Food">Fast Food</option>
+                            <option value="Curry">Curry</option>
+                            <option value="Cake">Cake & Desserts</option>
+                            <option value="Drinks">Drinks</option>
+                          </select>
+                        </div>
                       </div>
-                    )}
-                    <div>
-                      <p className="font-semibold text-slate-900">{item.name}</p>
-                      <p className="text-sm text-slate-500">৳{Number(item.price).toFixed(2)} / Stock {item.stock}</p>
-                      {item.description && (
-                        <p className="mt-1 text-xs text-slate-600 bg-slate-50 px-2 py-1 rounded border border-slate-100 max-w-md">
-                          <strong>Ingredients/Details:</strong> {item.description}
-                        </p>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-slate-500 mb-1">Description & Ingredients</label>
+                        <textarea
+                          placeholder="Description & Ingredients"
+                          value={editDraft.description}
+                          onChange={(e) => setEditDraft((p) => ({ ...p, description: e.target.value }))}
+                          rows={2}
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs focus:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-100 resize-none"
+                        />
+                      </div>
+                      <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-100 pt-3">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-semibold text-slate-500">Update Image (Optional)</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => setEditImageFile(e.target.files?.[0] || null)}
+                            className="text-xs text-slate-500 file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button type="button" variant="secondary" size="sm" onClick={cancelEdit}>
+                            Cancel
+                          </Button>
+                          <Button type="submit" size="sm" disabled={updatingItem}>
+                            {updatingItem ? 'Saving...' : 'Save Changes'}
+                          </Button>
+                        </div>
+                      </div>
+                    </form>
+                  );
+                }
+
+                return (
+                  <div key={item.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="flex items-start gap-4">
+                      {item.image_url ? (
+                        <img src={item.image_url} alt={item.name} className="h-12 w-12 rounded-xl object-cover border border-slate-100" />
+                      ) : (
+                        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-400">
+                          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        </div>
                       )}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-slate-900">{item.name}</p>
+                          <Badge variant="info" size="sm">
+                            {item.category || 'Food'}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-slate-500">৳{Number(item.price).toFixed(2)} / Stock {item.stock}</p>
+                        {item.description && (
+                          <p className="mt-1 text-xs text-slate-600 bg-slate-50 px-2 py-1 rounded border border-slate-100 max-w-md">
+                            <strong>Ingredients/Details:</strong> {item.description}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={item.status === 'live' ? 'success' : 'warning'}>{item.status}</Badge>
+                      <Button variant="secondary" size="sm" onClick={() => startEdit(item)}>
+                        Edit
+                      </Button>
+                      <Button variant="secondary" size="sm" onClick={() => toggleStatus(item.id)}>
+                        {item.status === 'live' ? 'Pause' : 'Resume'}
+                      </Button>
+                      <Button variant="danger" size="sm" onClick={() => deleteItem(item.id)}>
+                        Delete
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={item.status === 'live' ? 'success' : 'warning'}>{item.status}</Badge>
-                    <Button variant="secondary" size="sm" onClick={() => toggleStatus(item.id)}>
-                      {item.status === 'live' ? 'Pause' : 'Resume'}
-                    </Button>
-                    <Button variant="danger" size="sm" onClick={() => deleteItem(item.id)}>
-                      Delete
-                    </Button>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </Card>

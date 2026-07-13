@@ -113,9 +113,19 @@ const OrderTracking = ({ orderId, onClose }) => {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Live Courier & Route Map</span>
-              <span className="text-xs font-medium text-emerald-600 flex items-center gap-1">
-                <Clock className="h-3.5 w-3.5" /> Est. Arrival: ~{simulatedEta} mins
-              </span>
+              {trackingData?.status === 'Cancelled' ? (
+                <span className="text-xs font-medium text-rose-600 flex items-center gap-1">
+                  <X className="h-3.5 w-3.5" /> Cancelled
+                </span>
+              ) : trackingData?.status === 'Delivered' ? (
+                <span className="text-xs font-medium text-emerald-600 flex items-center gap-1">
+                  <CheckCircle className="h-3.5 w-3.5" /> Delivered
+                </span>
+              ) : (
+                <span className="text-xs font-medium text-emerald-600 flex items-center gap-1">
+                  <Clock className="h-3.5 w-3.5" /> Est. Arrival: ~{simulatedEta} mins
+                </span>
+              )}
             </div>
 
             <DeliveryRouteMap
@@ -134,58 +144,95 @@ const OrderTracking = ({ orderId, onClose }) => {
           </div>
 
           {/* Status Step Progress Timeline */}
-          <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
-            <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-4">Order Progress</h4>
-            <div className="relative flex items-center justify-between">
-              {/* Progress Line */}
-              <div className="absolute top-1/2 left-0 right-0 h-1 bg-slate-200 -translate-y-1/2 z-0" />
-              <div
-                className="absolute top-1/2 left-0 h-1 bg-orange-500 -translate-y-1/2 z-0 transition-all duration-500"
-                style={{ width: `${(activeStep / (orderSteps.length - 1)) * 100}%` }}
-              />
-
-              {orderSteps.map((step, idx) => {
-                const isPassed = idx <= activeStep;
-                const isCurrent = idx === activeStep;
-                return (
-                  <div key={step.id} className="relative z-10 flex flex-col items-center">
-                    <div
-                      className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                        isCurrent
-                          ? 'bg-orange-500 text-white ring-4 ring-orange-100 scale-110'
-                          : isPassed
-                          ? 'bg-orange-500 text-white'
-                          : 'bg-white border-2 border-slate-300 text-slate-400'
-                      }`}
-                    >
-                      {isPassed ? <CheckCircle className="h-4 w-4" /> : idx + 1}
-                    </div>
-                    <span className={`mt-2 text-[10px] font-medium text-center max-w-[60px] ${isCurrent ? 'text-orange-600 font-bold' : 'text-slate-500'}`}>
-                      {step.label}
-                    </span>
-                  </div>
-                );
-              })}
+          {trackingData?.status === 'Cancelled' ? (
+            <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-4 text-center">
+              <h4 className="text-xs font-semibold text-rose-800 uppercase tracking-wider mb-2">Order Progress</h4>
+              <p className="text-xs text-rose-700">This order was cancelled. No delivery progress is active.</p>
             </div>
-          </div>
+          ) : (
+            <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+              <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider mb-4">Order Progress</h4>
+              <div className="relative flex items-center justify-between">
+                {/* Progress Line */}
+                <div className="absolute top-1/2 left-0 right-0 h-1 bg-slate-200 -translate-y-1/2 z-0" />
+                <div
+                  className="absolute top-1/2 left-0 h-1 bg-orange-500 -translate-y-1/2 z-0 transition-all duration-500"
+                  style={{ width: `${(activeStep / (orderSteps.length - 1)) * 100}%` }}
+                />
+
+                {orderSteps.map((step, idx) => {
+                  const isPassed = idx <= activeStep;
+                  const isCurrent = idx === activeStep;
+                  return (
+                    <div key={step.id} className="relative z-10 flex flex-col items-center">
+                      <div
+                        className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                          isCurrent
+                            ? 'bg-orange-500 text-white ring-4 ring-orange-100 scale-110'
+                            : isPassed
+                            ? 'bg-orange-500 text-white'
+                            : 'bg-white border-2 border-slate-300 text-slate-400'
+                        }`}
+                      >
+                        {isPassed ? <CheckCircle className="h-4 w-4" /> : idx + 1}
+                      </div>
+                      <span className={`mt-2 text-[10px] font-medium text-center max-w-[60px] ${isCurrent ? 'text-orange-600 font-bold' : 'text-slate-500'}`}>
+                        {step.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right: Details & Courier Info */}
         <div className="space-y-4">
           {/* Estimated Time Card */}
-          <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-orange-950 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-orange-800">Estimated Delivery</span>
-              <Badge variant="warning">{trackingData?.status || 'On The Way'}</Badge>
+          {trackingData?.status === 'Cancelled' ? (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-rose-950 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-rose-800">Estimated Delivery</span>
+                <Badge variant="danger">Cancelled</Badge>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-extrabold text-rose-600">-</span>
+                <span className="text-sm font-medium text-rose-800">order cancelled</span>
+              </div>
+              <p className="text-xs text-rose-700">
+                This order has been cancelled. No delivery is scheduled.
+              </p>
             </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-orange-600">{simulatedEta}</span>
-              <span className="text-sm font-medium text-orange-800">minutes remaining</span>
+          ) : trackingData?.status === 'Delivered' ? (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-950 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-emerald-800">Estimated Delivery</span>
+                <Badge variant="success">Delivered</Badge>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-extrabold text-emerald-600">0</span>
+                <span className="text-sm font-medium text-emerald-800">minutes remaining</span>
+              </div>
+              <p className="text-xs text-emerald-700">
+                Your order has been successfully delivered! Thank you for ordering.
+              </p>
             </div>
-            <p className="text-xs text-orange-700">
-              Rider is currently on route to your location. Please keep your phone reachable.
-            </p>
-          </div>
+          ) : (
+            <div className="rounded-xl border border-orange-200 bg-orange-50 p-4 text-orange-950 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wider text-orange-800">Estimated Delivery</span>
+                <Badge variant="warning">{trackingData?.status || 'On The Way'}</Badge>
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-3xl font-extrabold text-orange-600">{simulatedEta}</span>
+                <span className="text-sm font-medium text-orange-800">minutes remaining</span>
+              </div>
+              <p className="text-xs text-orange-700">
+                Rider is currently on route to your location. Please keep your phone reachable.
+              </p>
+            </div>
+          )}
 
           {/* Delivery Rider Card */}
           <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">

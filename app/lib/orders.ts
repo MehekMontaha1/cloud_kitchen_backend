@@ -29,6 +29,24 @@ export async function getAreaFilteredFoods(customerLat: number, customerLng: num
     if (error) throw error;
     if (!menuItems) return [];
 
+    // Fetch reviews to calculate average ratings dynamically
+    const { data: ratingStats } = await supabaseAdmin
+      .from('reviews')
+      .select('seller_id, rating');
+
+    const sellerRatings: { [key: string]: { sum: number; count: number } } = {};
+    if (ratingStats) {
+      ratingStats.forEach((r: any) => {
+        if (r.seller_id) {
+          if (!sellerRatings[r.seller_id]) {
+            sellerRatings[r.seller_id] = { sum: 0, count: 0 };
+          }
+          sellerRatings[r.seller_id].sum += Number(r.rating);
+          sellerRatings[r.seller_id].count += 1;
+        }
+      });
+    }
+
     const filtered = menuItems
       .map((item: any) => {
         const hasSellerCoords = item.seller?.latitude && item.seller?.longitude;
@@ -45,6 +63,11 @@ export async function getAreaFilteredFoods(customerLat: number, customerLng: num
 
         const eta = Math.max(12, Math.round(distance * 3 + 10));
 
+        const ratingStatsForSeller = sellerRatings[item.seller_id];
+        const rating = ratingStatsForSeller 
+          ? parseFloat((ratingStatsForSeller.sum / ratingStatsForSeller.count).toFixed(1)) 
+          : 0;
+
         return {
           id: item.id,
           name: item.name,
@@ -56,10 +79,11 @@ export async function getAreaFilteredFoods(customerLat: number, customerLng: num
           eta,
           image: item.image_url || 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400',
           category: item.category || 'Food',
-          rating: 4.8,
+          rating,
           sellerLocation: item.seller?.location || 'Dhaka',
           sellerLat: sellerLat !== null ? sellerLat : customerLat,
           sellerLng: sellerLng !== null ? sellerLng : customerLng,
+          stock: Number(item.stock || 0),
         };
       })
       .filter((item: any) => item.distance <= maxRadiusKm);
@@ -80,6 +104,7 @@ export async function createCustomerOrder(customerId: string, payload: {
   delivery_latitude: number;
   delivery_longitude: number;
   type?: string;
+  items?: any[];
 }) {
   try {
     const { data, error } = await supabaseAdmin
@@ -95,6 +120,8 @@ export async function createCustomerOrder(customerId: string, payload: {
         delivery_address: payload.delivery_address,
         delivery_latitude: payload.delivery_latitude,
         delivery_longitude: payload.delivery_longitude,
+        items: payload.items || null,
+        payment_status: 'unpaid',
       })
       .select(`
         *,
@@ -110,6 +137,28 @@ export async function createCustomerOrder(customerId: string, payload: {
   }
 }
 
+// 2.7 Confirm payment for an order
+export async function confirmPayment(orderId: string, stripeSessionId: string) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('orders')
+      .update({
+        payment_status: 'paid',
+        stripe_session_id: stripeSessionId,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', orderId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('[Orders Service] Error confirming payment:', error);
+    throw error;
+  }
+}
+
 // 3. Fetch orders for customer
 export async function getCustomerOrders(customerId: string) {
   try {
@@ -121,6 +170,7 @@ export async function getCustomerOrders(customerId: string) {
         delivery_partner:profiles!delivery_partner_id(full_name, phone)
       `)
       .eq('customer_id', customerId)
+      .eq('payment_status', 'paid')
       .order('created_at', { ascending: false });
 
     if (error) throw error;

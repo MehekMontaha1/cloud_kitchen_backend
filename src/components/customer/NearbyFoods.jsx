@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Card, Button, Badge, Toggle } from '../common';
-import { MapPin, Sparkles } from 'lucide-react';
+import { Card, Button, Badge, Toggle, Modal } from '../common';
+import { MapPin, Sparkles, Star, MessageSquare } from 'lucide-react';
 
 const formatPrice = (price) => `৳${price.toFixed(2)}`;
 
@@ -19,9 +19,30 @@ function calculateDistanceKm(lat1, lon1, lat2, lon2) {
   return parseFloat((R * c).toFixed(1));
 }
 
+const CATEGORY_MAPPING = {
+  all: { label: 'All', emoji: '🍽️', keywords: [] },
+  food: { label: 'Food', emoji: '🍲', keywords: [] },
+  rice: { label: 'Rice', emoji: '🍚', keywords: ['rice', 'biryani', 'pulao', 'khichuri', 'nasi'] },
+  curry: { label: 'Curry', emoji: '🍛', keywords: ['curry', 'masala', 'korma', 'gravy', 'jhol', 'bhuna', 'tarkari', 'dal'] },
+  fastfood: { label: 'Fast Food', emoji: '🍔', keywords: ['burger', 'pizza', 'fries', 'sandwich', 'fastfood', 'fast food', 'pasta', 'shawarma', 'hotdog'] },
+  cake: { label: 'Cake & Desserts', emoji: '🍰', keywords: ['cake', 'pastry', 'pudding', 'bakery', 'cupcake', 'muffin', 'waffle', 'dessert', 'sweet', 'ice cream', 'custard'] },
+  drinks: { label: 'Drinks', emoji: '🥤', keywords: ['drink', 'beverage', 'juice', 'coffee', 'tea', 'shake', 'soda', 'cola', 'lassi'] }
+};
+
 const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLocation }) => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('eta');
+
+  // Review states
+  const [isReviewsOpen, setIsReviewsOpen] = useState(false);
+  const [reviewsTargetSeller, setReviewsTargetSeller] = useState(null);
+  const [reviewsList, setReviewsList] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [newRating, setNewRating] = useState(5);
+  const [newComment, setNewComment] = useState('');
+  const [submitError, setSubmitError] = useState(null);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   // Compute items with dynamic distance & ETA relative to customer's active location
   const processedFoods = useMemo(() => {
@@ -45,9 +66,29 @@ const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLo
     });
   }, [foods, userLocation]);
 
-  const categories = useMemo(() => {
-    const cats = ['all', ...new Set(processedFoods.map((f) => f.category))];
-    return cats;
+  const categoriesList = useMemo(() => {
+    const predefinedKeys = Object.keys(CATEGORY_MAPPING);
+    const otherCats = [...new Set(processedFoods.map((f) => (f.category || '').trim()))]
+      .filter((cat) => {
+        if (!cat) return false;
+        const normalized = cat.toLowerCase().replace(/\s+/g, '');
+        return normalized !== 'food' && normalized !== 'all' && !predefinedKeys.includes(normalized);
+      });
+
+    return [
+      ...Object.entries(CATEGORY_MAPPING).map(([key, item]) => ({
+        key,
+        label: item.label,
+        emoji: item.emoji,
+        isPredefined: true
+      })),
+      ...otherCats.map((cat) => ({
+        key: cat,
+        label: cat,
+        emoji: '🍱',
+        isPredefined: false
+      }))
+    ];
   }, [processedFoods]);
 
   const filteredAndSortedFoods = useMemo(() => {
@@ -57,10 +98,21 @@ const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLo
     if (showNearbyOnly) {
       result = result.filter((f) => f.distance <= 7.0 || f.eta <= 30);
     }
-    // IF 30-min radius toggle is OFF, show ALL items from all sellers!
 
     if (selectedCategory !== 'all') {
-      result = result.filter((f) => f.category === selectedCategory);
+      const mapping = CATEGORY_MAPPING[selectedCategory];
+      if (mapping) {
+        result = result.filter((f) => {
+          const foodCat = (f.category || '').toLowerCase().replace(/\s+/g, '');
+          const foodName = (f.name || '').toLowerCase();
+          const foodDesc = (f.description || '').toLowerCase();
+
+          if (foodCat === selectedCategory) return true;
+          return mapping.keywords.some(kw => foodName.includes(kw) || foodDesc.includes(kw));
+        });
+      } else {
+        result = result.filter((f) => (f.category || '').toLowerCase().trim() === selectedCategory.toLowerCase().trim());
+      }
     }
 
     if (sortBy === 'eta') {
@@ -77,6 +129,70 @@ const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLo
   }, [processedFoods, showNearbyOnly, selectedCategory, sortBy]);
 
   const nearbyCount = processedFoods.filter((f) => f.distance <= 7.0 || f.eta <= 30).length;
+
+  const fetchReviews = async (sellerId) => {
+    setReviewsLoading(true);
+    try {
+      const res = await fetch(`/api/reviews?seller_id=${sellerId}`);
+      if (res.ok) {
+        const result = await res.json();
+        if (result.success) {
+          setReviewsList(result.data || []);
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching reviews:', e);
+    } finally {
+      setReviewsLoading(false);
+    }
+  };
+
+  const handleOpenReviews = (item) => {
+    setReviewsTargetSeller({
+      id: item.sellerId,
+      name: item.seller
+    });
+    setNewRating(5);
+    setNewComment('');
+    setSubmitError(null);
+    setSubmitSuccess(false);
+    setReviewsList([]);
+    setIsReviewsOpen(true);
+    fetchReviews(item.sellerId);
+  };
+
+  const handleSubmitReview = async (e) => {
+    e.preventDefault();
+    if (!reviewsTargetSeller) return;
+    setSubmittingReview(true);
+    setSubmitError(null);
+    setSubmitSuccess(false);
+
+    try {
+      const res = await fetch('/api/reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          seller_id: reviewsTargetSeller.id,
+          rating: newRating,
+          comment: newComment
+        })
+      });
+
+      if (res.ok) {
+        setNewComment('');
+        setSubmitSuccess(true);
+        fetchReviews(reviewsTargetSeller.id);
+      } else {
+        const errData = await res.json();
+        setSubmitError(errData.error || 'Failed to submit review');
+      }
+    } catch (err) {
+      setSubmitError('An error occurred. Please try again.');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
   return (
     <Card>
@@ -108,19 +224,23 @@ const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLo
 
       <div className="mb-6 flex flex-wrap items-center gap-3">
         <div className="flex flex-wrap gap-2">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setSelectedCategory(cat)}
-              className={`rounded-full px-4 py-1.5 text-sm font-medium transition-colors ${
-                selectedCategory === cat
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              {cat === 'all' ? 'All' : cat}
-            </button>
-          ))}
+          {categoriesList.map((cat) => {
+            const isSelected = selectedCategory === cat.key;
+            return (
+              <button
+                key={cat.key}
+                onClick={() => setSelectedCategory(cat.key)}
+                className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-semibold transition-all hover:scale-105 ${
+                  isSelected
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                <span>{cat.emoji}</span>
+                <span>{cat.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         <select
@@ -150,16 +270,6 @@ const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLo
                   e.target.src = `https://via.placeholder.com/400x200/f1f5f9/94a3b8?text=${encodeURIComponent(item.name)}`;
                 }}
               />
-              <div className="absolute top-2 left-2 flex gap-2">
-                <Badge variant={item.eta <= 30 ? 'success' : 'warning'} size="sm">
-                  {item.eta} min
-                </Badge>
-              </div>
-              <div className="absolute top-2 right-2">
-                <Badge variant="default" size="sm">
-                  {item.distance} km
-                </Badge>
-              </div>
             </div>
 
             <div className="p-4 flex flex-col justify-between flex-1">
@@ -167,13 +277,29 @@ const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLo
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <h3 className="font-semibold text-slate-900">{item.name}</h3>
-                    <p className="mt-0.5 text-sm text-slate-500">{item.seller}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">{item.seller}</p>
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
+                        {item.category || 'Food'}
+                      </span>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                        item.stock > 0 ? 'bg-orange-100 text-orange-800' : 'bg-rose-100 text-rose-800'
+                      }`}>
+                        {item.stock > 0 ? `Stock: ${item.stock}` : 'Out of Stock'}
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1 text-sm">
-                    <svg className="h-4 w-4 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                    </svg>
-                    <span className="font-medium text-slate-700">{item.rating}</span>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <div className="flex items-center gap-1 text-sm">
+                      <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
+                      <span className="font-medium text-slate-700">{item.rating}</span>
+                    </div>
+                    <button
+                      onClick={() => handleOpenReviews(item)}
+                      className="text-[10px] text-slate-400 hover:text-indigo-600 underline font-semibold flex items-center gap-0.5"
+                    >
+                      <MessageSquare className="h-2.5 w-2.5" /> Reviews
+                    </button>
                   </div>
                 </div>
 
@@ -199,8 +325,9 @@ const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLo
                     variant="primary"
                     size="sm"
                     onClick={() => onOrder(item)}
+                    disabled={item.stock <= 0}
                   >
-                    Order
+                    {item.stock > 0 ? 'Order' : 'Out of Stock'}
                   </Button>
                 </div>
               </div>
@@ -217,6 +344,121 @@ const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLo
           <p className="mt-4 text-sm text-slate-500">No foods match your current filters or selected location.</p>
         </div>
       )}
+
+      {/* Reviews Modal */}
+      <Modal
+        isOpen={isReviewsOpen}
+        onClose={() => setIsReviewsOpen(false)}
+        title={reviewsTargetSeller ? `${reviewsTargetSeller.name} - Verified Reviews` : 'Reviews'}
+        size="lg"
+      >
+        <div className="space-y-6 max-h-[500px] overflow-y-auto pr-1">
+          {/* Reviews List */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Customer Feedback</h3>
+            {reviewsLoading ? (
+              <div className="py-4 text-center text-xs text-slate-500">Loading reviews...</div>
+            ) : reviewsList.length === 0 ? (
+              <div className="py-6 text-center rounded-xl bg-slate-50 border border-dashed border-slate-200">
+                <p className="text-xs text-slate-500">No reviews yet for this kitchen.</p>
+                <p className="text-[10px] text-slate-400 mt-1">Be the first to place a completed order and write a verified review!</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {reviewsList.map((rev) => (
+                  <div key={rev.id} className="border border-slate-100 bg-slate-50/50 rounded-xl p-3.5 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-800">{rev.customer_name}</span>
+                      <span className="text-[10px] text-slate-400">
+                        {new Date(rev.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </span>
+                    </div>
+                    {/* Rating stars display */}
+                    <div className="flex items-center gap-0.5">
+                      {[...Array(5)].map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`h-3 w-3 ${
+                            i < rev.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-200'
+                          }`}
+                        />
+                      ))}
+                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded ml-1">
+                        Verified Purchase
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-1">{rev.comment}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Review Submission Form */}
+          <form onSubmit={handleSubmitReview} className="border-t border-slate-100 pt-5 space-y-3">
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">Write a Verified Review</h3>
+              <p className="text-[10px] text-slate-500 mt-0.5">
+                Only customers with a completed order from this kitchen can post reviews.
+              </p>
+            </div>
+
+            {submitError && (
+              <div className="rounded-lg bg-rose-50 border border-rose-200 p-2.5 text-xs text-rose-800 font-medium">
+                {submitError}
+              </div>
+            )}
+
+            {submitSuccess && (
+              <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2.5 text-xs text-emerald-800 font-medium">
+                ✅ Review submitted successfully!
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label className="block text-[11px] font-bold text-slate-700">Rating</label>
+              <div className="flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map((stars) => (
+                  <button
+                    key={stars}
+                    type="button"
+                    onClick={() => setNewRating(stars)}
+                    className="p-0.5 rounded focus:outline-none"
+                  >
+                    <Star
+                      className={`h-6 w-6 transition-all ${
+                        stars <= newRating ? 'fill-amber-400 text-amber-400 scale-110' : 'text-slate-300'
+                      }`}
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="block text-[11px] font-bold text-slate-700">Comments</label>
+              <textarea
+                value={newComment}
+                onChange={(e) => setNewComment(e.target.value)}
+                placeholder="Share your experience (e.g. food taste, preparation speed)..."
+                rows={3}
+                required
+                className="w-full rounded-xl border border-slate-200 p-3 text-xs focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+              />
+            </div>
+
+            <Button
+              type="submit"
+              variant="primary"
+              size="sm"
+              className="w-full rounded-xl py-2"
+              disabled={submittingReview}
+            >
+              {submittingReview ? 'Verifying & Posting...' : 'Post Review'}
+            </Button>
+          </form>
+        </div>
+      </Modal>
     </Card>
   );
 };

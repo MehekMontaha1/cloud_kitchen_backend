@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
       delivery_latitude: body.delivery_latitude || 23.8103,
       delivery_longitude: body.delivery_longitude || 90.4125,
       type: body.type || 'Regular',
+      items: body.items || null,
     });
 
     return NextResponse.json({ success: true, data: order }, { status: 201 });

@@ -43,6 +43,40 @@ export async function addMenuItem(sellerId: string, payload: { name: string; cat
   }
 }
 
+// 2.5 Update an existing menu item
+export async function updateMenuItem(
+  sellerId: string,
+  itemId: string,
+  payload: {
+    name?: string;
+    category?: string;
+    price?: number;
+    stock?: number;
+    image_url?: string;
+    description?: string;
+    status?: string;
+  }
+) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('menu_items')
+      .update({
+        ...payload,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', itemId)
+      .eq('seller_id', sellerId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('[Seller Service] Error updating menu item:', error);
+    throw error;
+  }
+}
+
 // 3. Toggle menu item status (live <-> paused)
 export async function toggleMenuItemStatus(sellerId: string, itemId: string) {
   try {
@@ -85,6 +119,7 @@ export async function getSellerOrders(sellerId: string) {
         customer:profiles!customer_id(full_name, email)
       `)
       .eq('seller_id', sellerId)
+      .eq('payment_status', 'paid')
       .order('created_at', { ascending: false });
 
     if (error) throw error;

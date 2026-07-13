@@ -22,6 +22,7 @@ export async function getUserOrderChatData(userId: string) {
         customer:profiles!customer_id(id, full_name, role),
         delivery_partner:profiles!delivery_partner_id(id, full_name, role)
       `)
+      .eq('payment_status', 'paid')
       .or(`customer_id.eq.${userId},seller_id.eq.${userId},delivery_partner_id.eq.${userId}`)
       .order('created_at', { ascending: false });
 

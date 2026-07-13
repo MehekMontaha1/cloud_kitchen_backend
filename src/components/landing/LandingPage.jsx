@@ -134,7 +134,7 @@ const LandingPage = ({ onEnterSession }) => {
               </div>
 
               <h1 className="text-4xl font-extrabold tracking-tight text-white sm:text-6xl leading-[1.1]">
-                Gourmet Food Delivery Meets <span className="bg-gradient-to-r from-orange-400 via-amber-400 to-emerald-400 bg-clip-text text-transparent">Gemini AI Intelligence</span>.
+                Thizo Food Delivery Meets <span className="bg-gradient-to-r from-orange-400 via-amber-400 to-emerald-400 bg-clip-text text-transparent">Gemini AI Intelligence</span>.
               </h1>
 
               <p className="text-lg text-slate-400 leading-relaxed max-w-xl">
@@ -208,7 +208,7 @@ const LandingPage = ({ onEnterSession }) => {
                 <div className="relative h-[440px] overflow-hidden rounded-2xl">
                   <img
                     src="https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=1200&q=80"
-                    alt="Gourmet Cloud Kitchen Bowl"
+                    alt="Thizo Cloud Kitchen Bowl"
                     className="h-full w-full object-cover"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent" />
@@ -263,7 +263,7 @@ const LandingPage = ({ onEnterSession }) => {
             </div>
             <div>
               <p className="text-3xl font-black text-amber-400 sm:text-4xl">500+</p>
-              <p className="text-xs font-medium text-slate-400 mt-1">Gourmet Cloud Kitchen Partners</p>
+              <p className="text-xs font-medium text-slate-400 mt-1">Thizo Cloud Kitchen Partners</p>
             </div>
           </div>
         </div>
@@ -390,11 +390,10 @@ const LandingPage = ({ onEnterSession }) => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 rounded-2xl px-5 py-3 text-xs font-bold transition-all ${
-                    active
-                      ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/25'
-                      : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-800'
-                  }`}
+                  className={`flex items-center gap-2 rounded-2xl px-5 py-3 text-xs font-bold transition-all ${active
+                    ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/25'
+                    : 'bg-slate-900 text-slate-400 hover:bg-slate-800 hover:text-white border border-slate-800'
+                    }`}
                 >
                   <Icon className="h-4 w-4" />
                   {tab.label}
@@ -409,7 +408,7 @@ const LandingPage = ({ onEnterSession }) => {
               <div className="grid md:grid-cols-2 gap-8 items-center">
                 <div className="space-y-4">
                   <Badge variant="warning" size="md">Customer Portal</Badge>
-                  <h3 className="text-2xl font-bold text-white">Gourmet Foods & AI Health Guidance</h3>
+                  <h3 className="text-2xl font-bold text-white">Thizo Foods & AI Health Guidance</h3>
                   <p className="text-xs text-slate-400 leading-relaxed">
                     Filter foods by 30-min radius, place custom distant kitchen orders, chat directly with your kitchen cook & delivery rider, and use Gemini AI to inspect ingredients.
                   </p>
@@ -485,12 +484,12 @@ const LandingPage = ({ onEnterSession }) => {
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-2xl mx-auto mb-14">
             <h2 className="text-3xl font-extrabold text-white">Popular Cloud Kitchens</h2>
-            <p className="text-xs text-slate-400 mt-2">Gourmet kitchens delivering fresh meals nearby.</p>
+            <p className="text-xs text-slate-400 mt-2">Thizo kitchens delivering fresh meals nearby.</p>
           </div>
 
           <div className="grid sm:grid-cols-3 gap-6">
             {[
-              { name: 'Banani Gourmet Kitchen', cuisine: 'Artisanal Bowls & Salmon', rating: '4.9', img: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=600&q=80' },
+              { name: 'Banani Thizo Kitchen', cuisine: 'Artisanal Bowls & Salmon', rating: '4.9', img: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&w=600&q=80' },
               { name: 'Gulshan Wood-Fired Pizza', cuisine: 'Neapolitan Pizza & Pasta', rating: '4.8', img: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&w=600&q=80' },
               { name: 'Dhanmondi Thai Kitchen', cuisine: 'Thai Spicy Basil & Noodle Bowls', rating: '4.9', img: 'https://images.unsplash.com/photo-1559847844-5315695dadae?auto=format&fit=crop&w=600&q=80' },
             ].map((k, idx) => (

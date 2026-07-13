@@ -22,10 +22,16 @@ export async function POST(request: NextRequest) {
       foodContext = `\n[Food Item Details]\nName: ${foodItem.name}\nSeller/Kitchen: ${foodItem.seller || 'Cloud Kitchen'}\nPrice: ৳${foodItem.price}\nDescription & Ingredients: ${foodItem.description || 'Not specified'}\n`;
     }
 
-    const systemPrompt = `You are an expert AI Food & Health Assistant for CloudKitchen. 
-Your mission is to evaluate food items, ingredient lists, dietary health, and meal timing (lunch, dinner, pre/post workout, weight loss, allergies, etc.).
-Answer the user's question clearly, politely, and with structured health & nutrition insights.
-Focus strictly on food, health, ingredients, and nutritional recommendations.
+    const systemPrompt = `You are an expert AI Food & Health Assistant for CloudKitchen.
+Your mission is to evaluate food items, ingredient lists, dietary health, and suitability based on user requests.
+
+CRITICAL INSTRUCTIONS:
+1. KEEP YOUR ANSWERS SHORT AND CONCISE (maximum 2 to 3 sentences / 50 words). Do not write big paragraphs or long bulleted lists.
+2. DO NOT default to recommending the item for "lunch" unless the user specifically asks about lunch. Focus on its general health suitability instead.
+3. ANSWER LOGICALLY: If the user asks whether they should eat a food item (e.g., a burger, pizza, salad, etc.):
+   - Read the item's description/ingredients. If specific protein or calories are mentioned in the description, use those figures.
+   - If protein/calories are NOT mentioned, estimate them based on normal/typical nutritional values for that food type (e.g., a standard burger has roughly 450 calories and 22g of protein, standard pizza slice has 280 calories, salad has 120 calories, etc.).
+   - Give a direct, logical recommendation (Yes or No with a brief reason) based on those estimated or provided calories/protein and the user's question.
 
 ${foodContext}
 User Query: "${prompt}"`;
@@ -49,7 +55,7 @@ User Query: "${prompt}"`;
           const geminiData = await geminiRes.json();
           const textCandidate = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
           if (textCandidate) {
-            aiResponseText = textCandidate;
+            aiResponseText = textCandidate.trim();
           }
         }
       } catch (geminiErr) {
@@ -60,26 +66,71 @@ User Query: "${prompt}"`;
     // Fallback intelligent health advisor response if Gemini API key is not configured or fails
     if (!aiResponseText) {
       const lowerPrompt = prompt.toLowerCase();
-      const itemName = foodItem?.name || 'this food item';
-      const ingredients = foodItem?.description || 'standard ingredients';
+      const itemName = (foodItem?.name || 'this food item').toLowerCase();
+      const description = foodItem?.description || '';
+      const lowerDesc = description.toLowerCase();
 
-      if (lowerPrompt.includes('lunch') || lowerPrompt.includes('dinner') || lowerPrompt.includes('eat')) {
-        aiResponseText = `🥗 **Meal Recommendation for ${itemName}**:\n\n` +
-          `• **Best Meal Time**: Excellent choice for lunch or early dinner as it provides sustained energy throughout the day.\n` +
-          `• **Ingredient Breakdown**: Based on the description (${ingredients}), this item offers a balanced mix of proteins and macronutrients.\n` +
-          `• **Health Benefit**: Freshly prepared with wholesome ingredients to support energy and digestion.\n\n` +
-          `💡 *Tip*: Pair with fresh water or a light salad for optimal digestion!`;
-      } else if (lowerPrompt.includes('health') || lowerPrompt.includes('good') || lowerPrompt.includes('body')) {
-        aiResponseText = `💪 **Health & Nutrition Analysis**: ${itemName}\n\n` +
-          `• **Nutritional Profile**: Rich in essential nutrients from ingredients: ${ingredients}.\n` +
-          `• **Dietary Suitability**: Great for balanced daily nutrition, providing energy without excessive heavy processing.\n` +
-          `• **Recommendation**: Yes! It is wholesome and suitable for regular enjoyment in a balanced diet.`;
-      } else {
-        aiResponseText = `🌿 **AI Ingredient & Health Guide for ${itemName}**:\n\n` +
-          `• **Ingredients Used**: ${ingredients}\n` +
-          `• **Nutritional Insight**: Made with fresh cloud-kitchen quality components designed to satisfy and nourish.\n` +
-          `• **Eating Advice**: Suitable for lunch or dinner. Keep hydrated and enjoy fresh!`;
+      // Helper to extract or estimate calories and protein
+      let calories = 0;
+      let protein = 0;
+      let isEstimated = true;
+
+      // Check if description has calorie info
+      const calMatch = lowerDesc.match(/(\d+)\s*(?:kcal|calories)/);
+      if (calMatch) {
+        calories = parseInt(calMatch[1]);
+        isEstimated = false;
       }
+      
+      // Check if description has protein info
+      const protMatch = lowerDesc.match(/(\d+)\s*g\s*(?:of\s*)?protein/);
+      if (protMatch) {
+        protein = parseInt(protMatch[1]);
+        isEstimated = false;
+      }
+
+      // Default estimates based on item name
+      if (calories === 0 || protein === 0) {
+        if (itemName.includes('burger')) {
+          if (calories === 0) calories = 450;
+          if (protein === 0) protein = 22;
+        } else if (itemName.includes('pizza')) {
+          if (calories === 0) calories = 280;
+          if (protein === 0) protein = 11;
+        } else if (itemName.includes('salad')) {
+          if (calories === 0) calories = 120;
+          if (protein === 0) protein = 5;
+        } else if (itemName.includes('chicken') || itemName.includes('meat') || itemName.includes('beef') || itemName.includes('steak')) {
+          if (calories === 0) calories = 350;
+          if (protein === 0) protein = 28;
+        } else if (itemName.includes('rice') || itemName.includes('biryani') || itemName.includes('pulao')) {
+          if (calories === 0) calories = 550;
+          if (protein === 0) protein = 15;
+        } else {
+          if (calories === 0) calories = 320;
+          if (protein === 0) protein = 10;
+        }
+      }
+
+      // Determine recommendation logic
+      let recommendation = '';
+      if (lowerPrompt.includes('diet') || lowerPrompt.includes('weight loss') || lowerPrompt.includes('lose weight') || lowerPrompt.includes('fat loss')) {
+        if (calories > 400) {
+          recommendation = `This ${itemName} contains around ${calories} kcal and ${protein}g protein. Since it is relatively high in calories, you should eat it in moderation if you are trying to lose weight.`;
+        } else {
+          recommendation = `Yes, you can eat this ${itemName}! It has only around ${calories} kcal and ${protein}g protein, making it suitable for a weight loss diet.`;
+        }
+      } else if (lowerPrompt.includes('protein') || lowerPrompt.includes('workout') || lowerPrompt.includes('exercise') || lowerPrompt.includes('gym')) {
+        if (protein >= 18) {
+          recommendation = `Yes! With about ${protein}g of protein and ${calories} kcal, this ${itemName} is a great choice to fuel or recover from your workout.`;
+        } else {
+          recommendation = `It provides about ${protein}g of protein and ${calories} kcal. You might want to pair it with a higher protein source for post-workout recovery.`;
+        }
+      } else {
+        recommendation = `Yes, this ${itemName} is a reasonable choice! It contains about ${calories} kcal and ${protein}g protein. ${calories > 400 ? 'Enjoy it in moderation.' : 'It fits well into a balanced diet.'}`;
+      }
+
+      aiResponseText = recommendation;
     }
 
     return NextResponse.json({
