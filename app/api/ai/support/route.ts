@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
         seller:profiles!seller_id(shop_name)
       `)
       .eq('customer_id', user.id)
-      .eq('payment_status', 'paid')
+      .or('payment_status.eq.paid,payment_method.eq.cash_on_delivery')
       .not('status', 'in', '("Delivered","Cancelled")');
 
     let activeOrdersContext = 'The user currently has no active orders in preparation or delivery.';

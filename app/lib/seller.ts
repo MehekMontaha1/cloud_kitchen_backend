@@ -119,7 +119,8 @@ export async function getSellerOrders(sellerId: string) {
         customer:profiles!customer_id(full_name, email)
       `)
       .eq('seller_id', sellerId)
-      .eq('payment_status', 'paid')
+      .neq('status', 'Cancelled')
+      .or('payment_status.eq.paid,payment_method.eq.cash_on_delivery')
       .order('created_at', { ascending: false });
 
     if (error) throw error;

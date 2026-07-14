@@ -106,9 +106,11 @@ export async function createCustomerOrder(customerId: string, payload: {
   delivery_longitude: number;
   type?: string;
   items?: any[];
+  payment_method?: 'stripe' | 'cash_on_delivery';
 }) {
   try {
     const requestDetails = Array.isArray(payload.items) && payload.items.length > 0 ? payload.items[0] : null;
+    const paymentMethod = payload.payment_method || 'stripe';
 
     if (payload.type === 'Custom') {
       const { data, error } = await supabaseAdmin
@@ -152,6 +154,7 @@ export async function createCustomerOrder(customerId: string, payload: {
         delivery_latitude: payload.delivery_latitude,
         delivery_longitude: payload.delivery_longitude,
         items: payload.items || null,
+        payment_method: paymentMethod,
         payment_status: 'unpaid',
       })
       .select(`
@@ -201,7 +204,8 @@ export async function getCustomerOrders(customerId: string) {
         delivery_partner:profiles!delivery_partner_id(full_name, phone)
       `)
       .eq('customer_id', customerId)
-      .eq('payment_status', 'paid')
+      .neq('status', 'Cancelled')
+      .or('payment_status.eq.paid,payment_method.eq.cash_on_delivery')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -244,7 +248,8 @@ export async function getOrderTrackingDetails(orderId: string, customerId: strin
       `)
       .eq('id', orderId)
       .eq('customer_id', customerId)
-      .eq('payment_status', 'paid')
+      .neq('status', 'Cancelled')
+      .or('payment_status.eq.paid,payment_method.eq.cash_on_delivery')
       .single();
 
     if (error || !order) throw new Error('Order not found for this customer');

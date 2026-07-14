@@ -158,9 +158,8 @@ const NearbyKitchens = ({ foods, onOrder, onAskAI, hasLocation = true }) => {
             return (
               <div
                 key={item.id}
-                className={`group flex flex-col justify-between overflow-hidden rounded-2xl border transition-all bg-white hover:shadow-lg ${
-                  isOutOfStock ? 'border-rose-100 bg-rose-50/5' : 'border-slate-200'
-                }`}
+                className={`group flex flex-col justify-between overflow-hidden rounded-2xl border transition-all bg-white hover:shadow-lg ${isOutOfStock ? 'border-rose-100 bg-rose-50/5' : 'border-slate-200'
+                  }`}
               >
                 {/* Food Image */}
                 <div className="relative h-36 overflow-hidden bg-slate-100 shrink-0">
@@ -199,9 +198,8 @@ const NearbyKitchens = ({ foods, onOrder, onAskAI, hasLocation = true }) => {
                       <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
                         {item.category || 'Food'}
                       </span>
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                        item.stock > 0 ? 'bg-orange-100 text-orange-800' : 'bg-rose-100 text-rose-800'
-                      }`}>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${item.stock > 0 ? 'bg-orange-100 text-orange-800' : 'bg-rose-100 text-rose-800'
+                        }`}>
                         {item.stock > 0 ? `Stock: ${item.stock}` : 'Out of Stock'}
                       </span>
                     </div>

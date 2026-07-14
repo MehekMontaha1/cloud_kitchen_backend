@@ -29,7 +29,7 @@ export async function getAvailableOrdersForRider(riderId: string) {
       `)
       .is('delivery_partner_id', null)
       .eq('status', 'Ready') // only orders marked as Ready by the seller are deliverable
-      .eq('payment_status', 'paid')
+      .or('payment_status.eq.paid,payment_method.eq.cash_on_delivery')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -69,7 +69,7 @@ export async function getAcceptedOrdersForRider(riderId: string) {
         customer:profiles!customer_id(full_name, email, location, latitude, longitude)
       `)
       .eq('delivery_partner_id', riderId)
-      .eq('payment_status', 'paid')
+      .or('payment_status.eq.paid,payment_method.eq.cash_on_delivery')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -136,12 +136,27 @@ export async function updateDeliveryStatus(riderId: string, orderId: string, nex
       throw new Error('Invalid delivery status value.');
     }
 
+    const { data: currentOrder, error: currentOrderError } = await supabaseAdmin
+      .from('orders')
+      .select('payment_method, payment_status')
+      .eq('id', orderId)
+      .eq('delivery_partner_id', riderId)
+      .single();
+
+    if (currentOrderError) throw currentOrderError;
+
+    const updatePayload: Record<string, any> = {
+      status: nextStatus,
+      updated_at: new Date().toISOString()
+    };
+
+    if (nextStatus === 'Delivered' && currentOrder?.payment_method === 'cash_on_delivery') {
+      updatePayload.payment_status = 'paid';
+    }
+
     const { data, error } = await supabaseAdmin
       .from('orders')
-      .update({
-        status: nextStatus,
-        updated_at: new Date().toISOString()
-      })
+      .update(updatePayload)
       .eq('id', orderId)
       .eq('delivery_partner_id', riderId)
       .select()

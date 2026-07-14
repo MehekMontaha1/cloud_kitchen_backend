@@ -481,7 +481,7 @@ function App() {
     }));
   };
 
-  const handleCheckout = async () => {
+  const handleCheckout = async (paymentMethod = 'stripe') => {
     if (cartItems.length === 0) return;
     if (!hasSelectedCustomerLocation) {
       alert('Please select your delivery location on the map before placing an order.');
@@ -520,6 +520,7 @@ function App() {
             delivery_latitude: customerLocation.lat,
             delivery_longitude: customerLocation.lng,
             items: items.map(i => ({ id: i.id, name: i.name })),
+            payment_method: paymentMethod,
           }),
         });
 
@@ -532,6 +533,13 @@ function App() {
 
       const createdOrderIds = (await Promise.all(orderPromises)).filter(Boolean);
       const orderIdsStr = createdOrderIds.join(',');
+
+      if (paymentMethod === 'cash_on_delivery') {
+        const fallbackId = createdOrderIds[0] || 'ORD-' + Math.floor(1000 + Math.random() * 9000);
+        setCartItems([]);
+        setActiveTrackingOrderId(fallbackId);
+        return;
+      }
 
       if (createdOrderIds.length > 0) {
         // 3. Initialize Stripe checkout session for all orders combined

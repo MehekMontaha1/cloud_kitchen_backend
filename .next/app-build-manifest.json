@@ -30,11 +30,6 @@
       "static/chunks/main-app.js",
       "static/chunks/app/api/customer/flash-deals/route.js"
     ],
-    "/api/customer/foods/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/customer/foods/route.js"
-    ],
     "/api/customer/messages/route": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
@@ -45,40 +40,10 @@
       "static/chunks/main-app.js",
       "static/chunks/app/api/orders/route.js"
     ],
-    "/api/seller/menu/route": [
+    "/api/customer/foods/route": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/api/seller/menu/route.js"
-    ],
-    "/api/seller/orders/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/seller/orders/route.js"
-    ],
-    "/api/seller/earnings/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/seller/earnings/route.js"
-    ],
-    "/api/seller/offers/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/seller/offers/route.js"
-    ],
-    "/api/reviews/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/reviews/route.js"
-    ],
-    "/api/auth/logout/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/auth/logout/route.js"
-    ],
-    "/api/seller/custom-orders/route": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/api/seller/custom-orders/route.js"
+      "static/chunks/app/api/customer/foods/route.js"
     ]
   }
 }

@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
       delivery_longitude: deliveryLongitude,
       type: body.type || 'Regular',
       items: body.items || null,
+      payment_method: body.payment_method || 'stripe',
     });
 
     return NextResponse.json({ success: true, data: order }, { status: 201 });

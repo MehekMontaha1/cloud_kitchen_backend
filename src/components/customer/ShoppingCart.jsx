@@ -7,6 +7,7 @@ const ShoppingCart = ({ items, onRemove, onCheckout }) => {
   const [showCheckout, setShowCheckout] = useState(false);
   const [promoCode, setPromoCode] = useState('');
   const [promoApplied, setPromoApplied] = useState(null);
+  const [paymentMethod, setPaymentMethod] = useState('stripe');
 
   const subtotal = useMemo(() => {
     return items.reduce((sum, item) => sum + item.price, 0);
@@ -30,7 +31,7 @@ const ShoppingCart = ({ items, onRemove, onCheckout }) => {
   };
 
   const handleCheckout = () => {
-    onCheckout();
+    onCheckout(paymentMethod);
     setShowCheckout(false);
   };
 
@@ -172,12 +173,53 @@ const ShoppingCart = ({ items, onRemove, onCheckout }) => {
             <p className="mt-2 text-lg font-semibold text-slate-900">Total: {formatPrice(total)}</p>
           </div>
 
+          <div className="space-y-2">
+            <h4 className="text-sm font-semibold text-slate-900">Payment Method</h4>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('stripe')}
+                className={`rounded-2xl border p-4 text-left transition-all ${paymentMethod === 'stripe'
+                    ? 'border-indigo-300 bg-indigo-50 ring-2 ring-indigo-100'
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-slate-900">Stripe Card Payment</p>
+                    <p className="mt-1 text-xs text-slate-500">Pay now by card and track the order after confirmation.</p>
+                  </div>
+                  <span className={`mt-0.5 h-4 w-4 rounded-full border-2 ${paymentMethod === 'stripe' ? 'border-indigo-500 bg-indigo-500' : 'border-slate-300'}`} />
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('cash_on_delivery')}
+                className={`rounded-2xl border p-4 text-left transition-all ${paymentMethod === 'cash_on_delivery'
+                    ? 'border-emerald-300 bg-emerald-50 ring-2 ring-emerald-100'
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-slate-900">Cash on Delivery</p>
+                    <p className="mt-1 text-xs text-slate-500">Pay the rider after the food is delivered.</p>
+                  </div>
+                  <span className={`mt-0.5 h-4 w-4 rounded-full border-2 ${paymentMethod === 'cash_on_delivery' ? 'border-emerald-500 bg-emerald-500' : 'border-slate-300'}`} />
+                </div>
+              </button>
+            </div>
+          </div>
+
           <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
             <svg className="h-5 w-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
             </svg>
             <p className="text-sm text-emerald-800">
-              Your payment is secure. You can track your order in real-time.
+              {paymentMethod === 'stripe'
+                ? 'Your card payment is secure. You can track your order in real-time.'
+                : 'Your order will be marked as paid after delivery is completed.'}
             </p>
           </div>
 
@@ -186,7 +228,7 @@ const ShoppingCart = ({ items, onRemove, onCheckout }) => {
               Cancel
             </Button>
             <Button variant="success" className="flex-1" onClick={handleCheckout}>
-              Confirm Order
+              {paymentMethod === 'stripe' ? 'Pay & Confirm Order' : 'Place Cash Order'}
             </Button>
           </div>
         </div>
