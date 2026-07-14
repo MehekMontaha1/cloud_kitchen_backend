@@ -130,6 +130,26 @@ export async function getSellerOrders(sellerId: string) {
   }
 }
 
+// 4b. Fetch custom order requests for a seller
+export async function getSellerCustomOrders(sellerId: string) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('custom_orders')
+      .select(`
+        *,
+        customer:profiles!customer_id(full_name, email)
+      `)
+      .eq('seller_id', sellerId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('[Seller Service] Error getting custom orders:', error);
+    throw error;
+  }
+}
+
 // 5. Publish flash offer
 export async function publishFlashOffer(sellerId: string, payload: { title: string; discount: number; duration: number; item_ids?: string[] }) {
   try {
@@ -183,7 +203,13 @@ export async function getSellerEarnings(sellerId: string) {
       .select('*')
       .eq('seller_id', sellerId);
 
+    const { data: customOrders, error: customOrdersError } = await supabaseAdmin
+      .from('custom_orders')
+      .select('budget, status')
+      .eq('seller_id', sellerId);
+
     if (error) throw error;
+    if (customOrdersError) throw customOrdersError;
 
     const todayStr = new Date().toISOString().split('T')[0];
     const sevenDaysAgo = new Date();
@@ -217,6 +243,17 @@ export async function getSellerEarnings(sellerId: string) {
           if (o.type === 'Custom') {
             customTotal += val;
           }
+        }
+      });
+    }
+
+    if (customOrders && customOrders.length > 0) {
+      customOrders.forEach((o: any) => {
+        const val = Number(o.budget || 0);
+
+        if (o.status !== 'Cancelled') {
+          customTotal += val;
+          totalSales += val;
         }
       });
     }
@@ -273,6 +310,33 @@ export async function updateSellerOrderStatus(sellerId: string, orderId: string,
     return data;
   } catch (error) {
     console.error('[Seller Service] Error updating order status:', error);
+    throw error;
+  }
+}
+
+// 9b. Update a custom order request status by seller
+export async function updateSellerCustomOrderStatus(sellerId: string, orderId: string, status: string) {
+  try {
+    const allowedStatuses = ['Pending', 'Preparing', 'Ready', 'Cancelled'];
+    if (!allowedStatuses.includes(status)) {
+      throw new Error(`Invalid status transition to '${status}' by seller.`);
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from('custom_orders')
+      .update({
+        status,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', orderId)
+      .eq('seller_id', sellerId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('[Seller Service] Error updating custom order status:', error);
     throw error;
   }
 }

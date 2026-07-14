@@ -138,21 +138,19 @@ const SellerPanel = () => {
 
   const loadCustomOrders = async () => {
     try {
-      const res = await fetch('/api/seller/orders');
+      const res = await fetch('/api/seller/custom-orders');
       if (res.ok) {
         const result = await res.json();
         if (result.success && result.data) {
-          const customs = result.data
-            .filter((o) => o.type === 'Custom')
-            .map((order) => ({
-              id: order.id,
-              customer: order.customer ? order.customer.full_name : 'Customer',
-              item: order.item_name,
-              value: Number(order.value),
-              status: order.status,
-              details: order.items?.[0] || {},
-              createdAt: order.created_at,
-            }));
+          const customs = result.data.map((order) => ({
+            id: order.id,
+            customer: order.customer ? order.customer.full_name : 'Customer',
+            item: order.item_name,
+            value: Number(order.budget ?? order.value ?? 0),
+            status: order.status,
+            details: order.details || order.items?.[0] || {},
+            createdAt: order.created_at,
+          }));
           setCustomOrders(customs);
         }
       }
@@ -388,7 +386,7 @@ const SellerPanel = () => {
   // 4d. Accept / reject a custom order
   const handleCustomOrderAction = async (orderId, newStatus) => {
     try {
-      const res = await fetch('/api/seller/orders', {
+      const res = await fetch('/api/seller/custom-orders', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ orderId, status: newStatus }),

@@ -108,6 +108,36 @@ export async function createCustomerOrder(customerId: string, payload: {
   items?: any[];
 }) {
   try {
+    const requestDetails = Array.isArray(payload.items) && payload.items.length > 0 ? payload.items[0] : null;
+
+    if (payload.type === 'Custom') {
+      const { data, error } = await supabaseAdmin
+        .from('custom_orders')
+        .insert({
+          customer_id: customerId,
+          seller_id: payload.seller_id,
+          item_name: payload.item_name,
+          description: requestDetails?.description || payload.item_name,
+          note: requestDetails?.note || null,
+          cuisine: requestDetails?.cuisine || 'any',
+          urgency: requestDetails?.urgency || 'standard',
+          budget: payload.value,
+          delivery_address: payload.delivery_address,
+          delivery_latitude: payload.delivery_latitude,
+          delivery_longitude: payload.delivery_longitude,
+          status: 'Pending',
+          details: requestDetails,
+        })
+        .select(`
+          *,
+          seller:profiles!seller_id(full_name, shop_name, location, latitude, longitude)
+        `)
+        .single();
+
+      if (error) throw error;
+      return data;
+    }
+
     const { data, error } = await supabaseAdmin
       .from('orders')
       .insert({
@@ -178,6 +208,26 @@ export async function getCustomerOrders(customerId: string) {
     return data || [];
   } catch (error) {
     console.error('[Orders Service] Error fetching customer orders:', error);
+    throw error;
+  }
+}
+
+// 3b. Fetch custom order requests placed by a customer
+export async function getCustomerCustomOrders(customerId: string) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('custom_orders')
+      .select(`
+        *,
+        seller:profiles!seller_id(full_name, shop_name, location, latitude, longitude)
+      `)
+      .eq('customer_id', customerId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('[Orders Service] Error fetching customer custom orders:', error);
     throw error;
   }
 }
