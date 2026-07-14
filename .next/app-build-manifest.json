@@ -104,6 +104,11 @@
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/api/delivery/messages/route.js"
+    ],
+    "/api/reviews/route": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/api/reviews/route.js"
     ]
   }
 }
