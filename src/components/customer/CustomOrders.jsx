@@ -1,23 +1,23 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, Button, Input, Textarea, Select } from '../common';
 
-const cuisines = [
-  { value: 'any', label: 'Any Cuisine' },
-  { value: 'asian', label: 'Asian' },
-  { value: 'italian', label: 'Italian' },
-  { value: 'american', label: 'American' },
-  { value: 'mexican', label: 'Mexican' },
-  { value: 'indian', label: 'Indian' },
-  { value: 'mediterranean', label: 'Mediterranean' },
-];
-
 const urgency = [
-  { value: 'standard', label: 'Standard (2-4 hours)' },
-  { value: 'express', label: 'Express (1-2 hours)' },
-  { value: 'asap', label: 'ASAP' },
+  { value: 'standard', label: 'Standard (2 days)' },
+  { value: 'express', label: 'Express (1 day)' },
+  { value: 'asap', label: 'ASAP (1-5 hours)' },
 ];
 
-const CustomOrders = ({ foods = [], customerLocation = null, onSubmit }) => {
+const statusLabelMap = {
+  Pending: 'Request sent',
+  Preparing: 'Accepted by kitchen',
+  Ready: 'Ready for delivery',
+  Accepted: 'Rider Accepted',
+  'Picked Up': 'Picked Up',
+  Delivered: 'Delivered',
+  Cancelled: 'Rejected',
+};
+
+const CustomOrders = ({ foods = [], customerLocation = null, onSubmit, customerOrders = [], onTrackOrder }) => {
   const hasDeliveryLocation = Boolean(customerLocation?.lat && customerLocation?.lng);
 
   // Extract unique kitchens from nearby foods to direct the custom order request
@@ -41,7 +41,6 @@ const CustomOrders = ({ foods = [], customerLocation = null, onSubmit }) => {
     description: '',
     location: '',
     note: '',
-    cuisine: 'any',
     urgency: 'standard',
     budget: '',
   });
@@ -84,7 +83,7 @@ const CustomOrders = ({ foods = [], customerLocation = null, onSubmit }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const newErrors = validate();
-    
+
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -109,7 +108,6 @@ const CustomOrders = ({ foods = [], customerLocation = null, onSubmit }) => {
             name: form.name,
             description: form.description,
             note: form.note,
-            cuisine: form.cuisine,
             urgency: form.urgency,
             budget: Number(form.budget),
           }],
@@ -120,7 +118,7 @@ const CustomOrders = ({ foods = [], customerLocation = null, onSubmit }) => {
         const result = await res.json();
         setShowSuccess(true);
         if (onSubmit) onSubmit(result.data);
-        
+
         setTimeout(() => {
           setShowSuccess(false);
           setForm({
@@ -129,7 +127,6 @@ const CustomOrders = ({ foods = [], customerLocation = null, onSubmit }) => {
             description: '',
             location: '',
             note: '',
-            cuisine: 'any',
             urgency: 'standard',
             budget: '',
           });
@@ -147,11 +144,93 @@ const CustomOrders = ({ foods = [], customerLocation = null, onSubmit }) => {
 
   return (
     <Card>
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold text-slate-900">Custom Orders</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Request custom/special menu items from nearby kitchens not listed on the platform.
-        </p>
+      <div className="mb-6 space-y-4">
+        <div>
+          <h2 className="text-xl font-semibold text-slate-900">Custom Orders</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Request a custom dish from nearby kitchens and track the request from accepted to ready for delivery.
+          </p>
+        </div>
+
+        {customerOrders.length > 0 && (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">Your custom order updates</h3>
+                <p className="text-xs text-slate-500">Accepted requests move from kitchen prep to delivery-ready automatically.</p>
+              </div>
+              <span className="rounded-full bg-indigo-100 px-2.5 py-1 text-[10px] font-bold text-indigo-700">
+                {customerOrders.length} request{customerOrders.length === 1 ? '' : 's'}
+              </span>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              {customerOrders.map((order) => {
+                const linkedOrderId = order.details?.related_order_id || order.details?.linked_order_id || null;
+                const friendlyStatus = statusLabelMap[order.status] || order.status;
+                return (
+                  <div key={order.id} className={`rounded-2xl border p-4 ${order.status === 'Cancelled'
+                      ? 'border-rose-200 bg-rose-50/40'
+                      : order.status === 'Ready'
+                        ? 'border-emerald-200 bg-emerald-50/40'
+                        : order.status === 'Preparing'
+                          ? 'border-indigo-200 bg-indigo-50/40'
+                          : 'border-amber-200 bg-amber-50/40'
+                    }`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-slate-900">{order.item_name}</p>
+                        <p className="mt-0.5 text-xs text-slate-500">{order.details?.description || order.description}</p>
+                      </div>
+                      <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${order.status === 'Cancelled'
+                          ? 'bg-rose-100 text-rose-700'
+                          : order.status === 'Ready'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : order.status === 'Preparing'
+                              ? 'bg-indigo-100 text-indigo-700'
+                              : 'bg-amber-100 text-amber-700'
+                        }`}>
+                        {friendlyStatus}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] font-semibold text-slate-500">
+                      <span className="rounded-full bg-white px-2 py-1 border border-slate-200">Budget ৳{Number(order.budget || 0).toFixed(2)}</span>
+                      <span className="rounded-full bg-white px-2 py-1 border border-slate-200">{order.urgency || order.details?.urgency || 'standard'}</span>
+                      {linkedOrderId && (
+                        <span className="rounded-full bg-white px-2 py-1 border border-slate-200">Delivery linked</span>
+                      )}
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <p className="text-[11px] text-slate-500">
+                        {order.status === 'Ready'
+                          ? 'A rider can accept this now.'
+                          : order.status === 'Accepted'
+                          ? 'Rider is on the way to pick up your order.'
+                          : order.status === 'Picked Up'
+                          ? 'Rider is on the way to you!'
+                          : order.status === 'Delivered'
+                          ? 'Enjoy your food!'
+                          : 'We will update you as the kitchen progresses.'}
+                      </p>
+                      {linkedOrderId && order.status !== 'Delivered' && order.status !== 'Cancelled' && (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => onTrackOrder && onTrackOrder(linkedOrderId)}
+                        >
+                          Track delivery
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
       </div>
 
       {submitError && (
@@ -178,19 +257,13 @@ const CustomOrders = ({ foods = [], customerLocation = null, onSubmit }) => {
           />
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-2">
           <Input
             label="Budget (৳)"
             placeholder="৳0.00"
             value={form.budget}
             onChange={handleChange('budget')}
             error={errors.budget}
-          />
-          <Select
-            label="Preferred Cuisine"
-            options={cuisines}
-            value={form.cuisine}
-            onChange={handleChange('cuisine')}
           />
           <Select
             label="Delivery Urgency"

@@ -144,7 +144,31 @@ export async function getSellerCustomOrders(sellerId: string) {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    if (!data || data.length === 0) return [];
+
+    // Fetch linked orders status in a single query
+    const linkedOrderIds = data
+      .map((co: any) => co.details?.related_order_id || co.details?.linked_order_id)
+      .filter(Boolean);
+
+    if (linkedOrderIds.length > 0) {
+      const { data: linkedOrders } = await supabaseAdmin
+        .from('orders')
+        .select('id, status')
+        .in('id', linkedOrderIds);
+
+      if (linkedOrders && linkedOrders.length > 0) {
+        const statusMap = new Map(linkedOrders.map((o: any) => [o.id, o.status]));
+        data.forEach((co: any) => {
+          const lId = co.details?.related_order_id || co.details?.linked_order_id;
+          if (lId && statusMap.has(lId)) {
+            co.status = statusMap.get(lId);
+          }
+        });
+      }
+    }
+
+    return data;
   } catch (error) {
     console.error('[Seller Service] Error getting custom orders:', error);
     throw error;
@@ -323,10 +347,85 @@ export async function updateSellerCustomOrderStatus(sellerId: string, orderId: s
       throw new Error(`Invalid status transition to '${status}' by seller.`);
     }
 
+    const { data: customOrder, error: fetchError } = await supabaseAdmin
+      .from('custom_orders')
+      .select('*')
+      .eq('id', orderId)
+      .eq('seller_id', sellerId)
+      .single();
+
+    if (fetchError || !customOrder) {
+      throw fetchError || new Error('Custom order not found or unauthorized');
+    }
+
+    const currentDetails = customOrder.details && typeof customOrder.details === 'object' ? customOrder.details : {};
+    let linkedOrderId = currentDetails.related_order_id || currentDetails.linked_order_id || null;
+
+    if (status === 'Ready') {
+      if (!linkedOrderId) {
+        const { data: linkedOrder, error: linkedOrderError } = await supabaseAdmin
+          .from('orders')
+          .insert({
+            customer_id: customOrder.customer_id,
+            seller_id: sellerId,
+            item_name: customOrder.item_name,
+            value: Number(customOrder.budget || 0),
+            type: 'Custom',
+            status: 'Ready',
+            eta: 'Ready for pickup',
+            delivery_address: customOrder.delivery_address,
+            delivery_latitude: customOrder.delivery_latitude,
+            delivery_longitude: customOrder.delivery_longitude,
+            items: [customOrder.details || {
+              name: customOrder.item_name,
+              description: customOrder.description,
+              note: customOrder.note,
+              cuisine: customOrder.cuisine,
+              urgency: customOrder.urgency,
+              budget: Number(customOrder.budget || 0),
+            }],
+            payment_method: 'cash_on_delivery',
+            payment_status: 'unpaid',
+          })
+          .select('id')
+          .single();
+
+        if (linkedOrderError) throw linkedOrderError;
+        linkedOrderId = linkedOrder?.id || null;
+      } else {
+        await supabaseAdmin
+          .from('orders')
+          .update({
+            status: 'Ready',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', linkedOrderId)
+          .eq('seller_id', sellerId);
+      }
+    }
+
+    if (status === 'Cancelled' && linkedOrderId) {
+      await supabaseAdmin
+        .from('orders')
+        .update({
+          status: 'Cancelled',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', linkedOrderId)
+        .eq('seller_id', sellerId);
+    }
+
+    const updatedDetails = {
+      ...currentDetails,
+      related_order_id: linkedOrderId,
+      delivery_payment_method: 'cash_on_delivery',
+    };
+
     const { data, error } = await supabaseAdmin
       .from('custom_orders')
       .update({
         status,
+        details: updatedDetails,
         updated_at: new Date().toISOString(),
       })
       .eq('id', orderId)

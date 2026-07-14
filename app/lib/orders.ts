@@ -8,9 +8,9 @@ export function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lo
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return parseFloat((R * c).toFixed(1));
 }
@@ -64,8 +64,8 @@ export async function getAreaFilteredFoods(customerLat: number, customerLng: num
         const eta = Math.max(12, Math.round(distance * 3 + 10));
 
         const ratingStatsForSeller = sellerRatings[item.seller_id];
-        const rating = ratingStatsForSeller 
-          ? parseFloat((ratingStatsForSeller.sum / ratingStatsForSeller.count).toFixed(1)) 
+        const rating = ratingStatsForSeller
+          ? parseFloat((ratingStatsForSeller.sum / ratingStatsForSeller.count).toFixed(1))
           : 0;
 
         return {
@@ -229,7 +229,31 @@ export async function getCustomerCustomOrders(customerId: string) {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    return data || [];
+    if (!data || data.length === 0) return [];
+
+    // Fetch linked orders status in a single query
+    const linkedOrderIds = data
+      .map((co: any) => co.details?.related_order_id || co.details?.linked_order_id)
+      .filter(Boolean);
+
+    if (linkedOrderIds.length > 0) {
+      const { data: linkedOrders } = await supabaseAdmin
+        .from('orders')
+        .select('id, status')
+        .in('id', linkedOrderIds);
+
+      if (linkedOrders && linkedOrders.length > 0) {
+        const statusMap = new Map(linkedOrders.map((o: any) => [o.id, o.status]));
+        data.forEach((co: any) => {
+          const lId = co.details?.related_order_id || co.details?.linked_order_id;
+          if (lId && statusMap.has(lId)) {
+            co.status = statusMap.get(lId);
+          }
+        });
+      }
+    }
+
+    return data;
   } catch (error) {
     console.error('[Orders Service] Error fetching customer custom orders:', error);
     throw error;

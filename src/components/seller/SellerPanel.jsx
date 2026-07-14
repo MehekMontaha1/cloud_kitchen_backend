@@ -395,6 +395,7 @@ const SellerPanel = () => {
         setCustomOrders(prev =>
           prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o)
         );
+        await loadCustomOrders();
         loadEarnings();
       } else {
         const errData = await res.json();
@@ -621,9 +622,9 @@ const SellerPanel = () => {
                       <Badge variant={order.type === 'Regular' ? 'success' : 'warning'}>{order.type}</Badge>
                       <Badge variant={
                         order.status === 'Pending' ? 'warning' :
-                        order.status === 'Preparing' ? 'primary' :
-                        order.status === 'Ready' ? 'info' :
-                        order.status === 'Cancelled' ? 'danger' : 'success'
+                          order.status === 'Preparing' ? 'primary' :
+                            order.status === 'Ready' ? 'info' :
+                              order.status === 'Cancelled' ? 'danger' : 'success'
                       } size="sm">
                         {order.status}
                       </Badge>
@@ -631,7 +632,7 @@ const SellerPanel = () => {
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-sm">
                     <span className="font-semibold text-slate-900">${order.value.toFixed(2)}</span>
-                    
+
                     <div className="flex flex-wrap items-center gap-2">
                       {order.status === 'Pending' && (
                         <>
@@ -735,7 +736,7 @@ const SellerPanel = () => {
                             if (e.target.checked) {
                               if (selectedDealItems.length >= 2) {
                                 alert("You can select up to 2 items for this flash sale.");
-                                  return;
+                                return;
                               }
                               setSelectedDealItems([...selectedDealItems, item.id]);
                             } else {
@@ -848,75 +849,110 @@ const SellerPanel = () => {
 
       {/* ── Custom Order Requests ── */}
       <Card>
-        <div className="mb-5 flex items-center gap-2">
-          <ReceiptText className="h-5 w-5 text-indigo-500" />
-          <h3 className="text-xl font-semibold text-slate-900">Custom Order Requests</h3>
-          <span className="bg-indigo-100 text-indigo-700 text-xs px-2 py-0.5 rounded-full font-bold">
-            {customOrders.filter(o => o.status === 'Pending').length} Pending
-          </span>
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="rounded-2xl bg-indigo-50 p-2.5 text-indigo-600">
+              <ReceiptText className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="text-xl font-semibold text-slate-900">Custom Order Requests</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Accept a request, prepare it, then mark it ready to hand off to a rider. Custom orders are delivered cash on delivery.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-700">
+              {customOrders.filter(o => o.status === 'Pending').length} pending
+            </span>
+            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">
+              {customOrders.filter(o => o.status === 'Preparing' || o.status === 'Ready').length} active
+            </span>
+          </div>
         </div>
+
         {customOrders.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 py-10 text-center">
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 py-12 text-center">
             <ReceiptText className="mx-auto h-8 w-8 text-slate-300 mb-2" />
-            <p className="text-sm text-slate-400">No custom order requests yet.</p>
-            <p className="text-xs text-slate-300 mt-1">When customers send special food requests, they appear here.</p>
+            <p className="text-sm font-medium text-slate-500">No custom order requests yet.</p>
+            <p className="text-xs text-slate-400 mt-1">New requests will appear here with action buttons and delivery handoff status.</p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {customOrders.map(co => {
+          <div className="grid gap-4">
+            {customOrders.map((co) => {
               const isPending = co.status === 'Pending';
               const isActive = co.status === 'Preparing' || co.status === 'Ready';
               const isRejected = co.status === 'Cancelled';
+              const statusStyles = isPending
+                ? 'border-amber-200 bg-gradient-to-br from-amber-50 to-white'
+                : isRejected
+                  ? 'border-rose-100 bg-gradient-to-br from-rose-50/60 to-white opacity-75'
+                  : 'border-emerald-200 bg-gradient-to-br from-emerald-50/60 to-white';
+
               return (
-                <div key={co.id} className={`rounded-xl border p-4 ${
-                  isPending ? 'border-amber-200 bg-amber-50/30'
-                  : isRejected ? 'border-rose-100 bg-rose-50/20 opacity-60'
-                  : 'border-emerald-200 bg-emerald-50/20'
-                }`}>
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="space-y-1 flex-1">
+                <div key={co.id} className={`rounded-2xl border p-4 shadow-sm ${statusStyles}`}>
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div className="space-y-2 flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-bold text-slate-900 text-sm">{co.item || 'Custom Food Request'}</p>
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
-                          isPending ? 'bg-amber-100 text-amber-800'
-                          : isRejected ? 'bg-rose-100 text-rose-800'
-                          : 'bg-emerald-100 text-emerald-800'
-                        }`}>{co.status}</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isPending ? 'bg-amber-100 text-amber-800'
+                            : isRejected ? 'bg-rose-100 text-rose-800'
+                              : 'bg-emerald-100 text-emerald-800'
+                          }`}>
+                          {co.status}
+                        </span>
                       </div>
-                      <p className="text-xs text-slate-500">From: <span className="font-semibold text-slate-700">{co.customer}</span></p>
+
+                      <div className="flex flex-wrap gap-2 text-[10px] font-semibold text-slate-500">
+                        <span className="rounded-full border border-slate-200 bg-white px-2 py-1">From {co.customer}</span>
+                        <span className="rounded-full border border-slate-200 bg-white px-2 py-1">COD</span>
+                        <span className="rounded-full border border-slate-200 bg-white px-2 py-1">৳{Number(co.value || 0).toFixed(2)}</span>
+                      </div>
+
                       {co.details?.description && (
-                        <p className="text-xs text-slate-500 italic line-clamp-2">"{co.details.description}"</p>
+                        <p className="text-xs text-slate-600 leading-5 line-clamp-2">{co.details.description}</p>
                       )}
-                      <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[10px] text-slate-400 font-medium">
-                        {co.details?.cuisine && <span>Cuisine: {co.details.cuisine}</span>}
-                        {co.details?.urgency && <span>Urgency: {co.details.urgency}</span>}
-                        <span className="text-indigo-600 font-bold">Budget: ৳{co.value?.toFixed(2)}</span>
+
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-500 font-medium">
+                        <span>Urgency: {co.details?.urgency || 'standard'}</span>
+                        <span>{isPending ? 'Waiting for kitchen approval' : isActive ? 'Kitchen is preparing this order' : 'Rejected by kitchen'}</span>
                       </div>
                     </div>
-                    <div className="flex gap-2 shrink-0">
+
+                    <div className="flex shrink-0 flex-wrap gap-2">
                       {isPending && (
                         <>
                           <button
+                            type="button"
                             onClick={() => handleCustomOrderAction(co.id, 'Preparing')}
-                            className="rounded-lg bg-emerald-600 text-white text-xs font-bold px-3 py-1.5 hover:bg-emerald-700 transition-colors"
+                            className="rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-emerald-700"
                           >
-                            ✓ Accept
+                            Accept Request
                           </button>
                           <button
+                            type="button"
                             onClick={() => handleCustomOrderAction(co.id, 'Cancelled')}
-                            className="rounded-lg border border-rose-300 text-rose-700 text-xs font-bold px-3 py-1.5 hover:bg-rose-50 transition-colors"
+                            className="rounded-xl border border-rose-200 bg-white px-3.5 py-2 text-xs font-bold text-rose-700 transition-colors hover:bg-rose-50"
                           >
-                            ✕ Reject
+                            Reject
                           </button>
                         </>
                       )}
+
                       {isActive && (
                         <button
+                          type="button"
                           onClick={() => handleCustomOrderAction(co.id, 'Ready')}
-                          className="rounded-lg bg-indigo-600 text-white text-xs font-bold px-3 py-1.5 hover:bg-indigo-700 transition-colors"
+                          className="rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-indigo-700"
                         >
-                          Mark Ready
+                          Pass to Delivery Man
                         </button>
+                      )}
+
+                      {isRejected && (
+                        <span className="rounded-xl border border-rose-200 bg-white px-3.5 py-2 text-xs font-bold text-rose-700">
+                          Rejected
+                        </span>
                       )}
                     </div>
                   </div>

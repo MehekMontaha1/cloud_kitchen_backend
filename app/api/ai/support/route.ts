@@ -44,8 +44,7 @@ export async function POST(request: NextRequest) {
       activeOrdersContext = activeOrders
         .map(
           (o) =>
-            `- Order ID: ${o.id}, Kitchen: ${o.seller?.shop_name || 'Cloud Kitchen'}, Items: ${
-              o.item_name
+            `- Order ID: ${o.id}, Kitchen: ${o.seller?.shop_name || 'Cloud Kitchen'}, Items: ${o.item_name
             }, Status: ${o.status}, ETA: ${o.eta || '25 mins'}`
         )
         .join('\n');
@@ -107,9 +106,8 @@ User Query: "${prompt}"`;
       ) {
         if (activeOrders && activeOrders.length > 0) {
           const first = activeOrders[0];
-          aiResponseText = `Your order of "${first.item_name}" from ${
-            first.seller?.shop_name || 'Cloud Kitchen'
-          } is currently ${first.status}. It is estimated to arrive in ${first.eta || '25 mins'}.`;
+          aiResponseText = `Your order of "${first.item_name}" from ${first.seller?.shop_name || 'Cloud Kitchen'
+            } is currently ${first.status}. It is estimated to arrive in ${first.eta || '25 mins'}.`;
         } else {
           aiResponseText = `You do not have any active orders right now. You can place a new order from the 'Nearby Foods' section on your dashboard.`;
         }

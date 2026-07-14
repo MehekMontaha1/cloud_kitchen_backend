@@ -71,6 +71,7 @@ function App() {
   const [paymentStatusMessage, setPaymentStatusMessage] = useState(null);
   const [customerOrders, setCustomerOrders] = useState([]);
   const [customerOrdersLoaded, setCustomerOrdersLoaded] = useState(false);
+  const [customerCustomOrders, setCustomerCustomOrders] = useState([]);
   const [activeTrackingOrderId, setActiveTrackingOrderId] = useState(null);
   const hasSelectedCustomerLocation = isValidCustomerLocation(customerLocation);
 
@@ -159,20 +160,29 @@ function App() {
           setCustomerOrders(ordersDataResult.data || []);
         }
       }
+
+      const customOrdersRes = await fetch('/api/customer/custom-orders');
+      if (customOrdersRes.ok) {
+        const customOrdersData = await customOrdersRes.json();
+        if (customOrdersData.success) {
+          setCustomerCustomOrders(customOrdersData.data || []);
+        }
+      }
       setCustomerOrdersLoaded(true);
     } catch (err) {
       console.error('Error loading customer backend data:', err);
     }
   };
 
-  const loadCustomerFoods = async () => {
+  const loadCustomerFoods = async (limitToNearby = showNearbyOnly) => {
     if (!hasSelectedCustomerLocation) {
       setRealFoods([]);
       return;
     }
 
     try {
-      const foodsRes = await fetch(`/api/customer/foods?lat=${customerLocation.lat}&lng=${customerLocation.lng}`);
+      const radius = limitToNearby ? 7 : 99999;
+      const foodsRes = await fetch(`/api/customer/foods?lat=${customerLocation.lat}&lng=${customerLocation.lng}&radius=${radius}`);
       if (foodsRes.ok) {
         const foodsDataResult = await foodsRes.json();
         if (foodsDataResult.success) {
@@ -191,6 +201,7 @@ function App() {
       setCustomerLocation(null);
       setRealFoods([]);
       setCustomerOrders([]);
+      setCustomerCustomOrders([]);
       setCustomerOrdersLoaded(false);
     }
   }, [session?.id, session?.role]);
@@ -199,7 +210,7 @@ function App() {
     if (session?.role === 'customer') {
       loadCustomerFoods();
     }
-  }, [session?.id, session?.role, customerLocation?.lat, customerLocation?.lng]);
+  }, [session?.id, session?.role, customerLocation?.lat, customerLocation?.lng, showNearbyOnly]);
 
   const visibleFoods = useMemo(() => {
     if (!hasSelectedCustomerLocation) return [];
@@ -361,7 +372,7 @@ function App() {
             setCartItems([]);
             // Clear URL params
             window.history.replaceState({}, document.title, window.location.pathname);
-            
+
             // Reload customer dashboard data to show the new paid order
             if (session?.role === 'customer') {
               loadCustomerData();
@@ -617,15 +628,14 @@ function App() {
       </section>
 
       {paymentStatusMessage && (
-        <div className={`p-4 rounded-xl border flex items-center justify-between gap-3 text-xs sm:text-sm font-medium shadow-xs transition-all ${
-          paymentStatusMessage.status === 'confirming'
-            ? 'bg-blue-50 border-blue-200 text-blue-800'
-            : paymentStatusMessage.status === 'success'
+        <div className={`p-4 rounded-xl border flex items-center justify-between gap-3 text-xs sm:text-sm font-medium shadow-xs transition-all ${paymentStatusMessage.status === 'confirming'
+          ? 'bg-blue-50 border-blue-200 text-blue-800'
+          : paymentStatusMessage.status === 'success'
             ? 'bg-emerald-50 border-emerald-200 text-emerald-800 animate-pulse'
             : paymentStatusMessage.status === 'cancel'
-            ? 'bg-amber-50 border-amber-200 text-amber-800'
-            : 'bg-rose-50 border-rose-200 text-rose-800'
-        }`}>
+              ? 'bg-amber-50 border-amber-200 text-amber-800'
+              : 'bg-rose-50 border-rose-200 text-rose-800'
+          }`}>
           <div className="flex items-center gap-2">
             {paymentStatusMessage.status === 'confirming' && (
               <svg className="animate-spin h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24">
@@ -644,7 +654,7 @@ function App() {
             )}
             <span>{paymentStatusMessage.message}</span>
           </div>
-          <button 
+          <button
             onClick={() => setPaymentStatusMessage(null)}
             className="text-slate-400 hover:text-slate-600 font-bold px-2 py-1 rounded hover:bg-slate-100/50"
           >
@@ -675,35 +685,33 @@ function App() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {trackingOrders.map((order) => {
               const createdTime = new Date(order.created_at);
-              const ageMins = isNaN(createdTime.getTime()) 
-                ? 0 
+              const ageMins = isNaN(createdTime.getTime())
+                ? 0
                 : Math.round((Date.now() - createdTime.getTime()) / 60000);
               const isCompleted = order.status === 'Delivered' || order.status === 'Cancelled';
               const isDelayed = !isCompleted && ageMins > 45;
               const isValidDate = !isNaN(createdTime.getTime());
-              const timeString = isValidDate 
+              const timeString = isValidDate
                 ? createdTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 : 'Unknown time';
 
               return (
                 <div
                   key={order.id}
-                  className={`border rounded-xl p-4 flex flex-col justify-between transition-all hover:shadow-xs bg-slate-50/50 ${
-                    isDelayed ? 'border-amber-300 bg-amber-50/10' : 'border-slate-200'
-                  }`}
+                  className={`border rounded-xl p-4 flex flex-col justify-between transition-all hover:shadow-xs bg-slate-50/50 ${isDelayed ? 'border-amber-300 bg-amber-50/10' : 'border-slate-200'
+                    }`}
                 >
                   <div>
                     <div className="flex items-center justify-between gap-2 mb-2">
                       <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                         Order status
                       </span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        isCompleted
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : order.status === 'Ready' || order.status === 'Picked Up'
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isCompleted
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : order.status === 'Ready' || order.status === 'Picked Up'
                           ? 'bg-blue-100 text-blue-800 animate-pulse'
                           : 'bg-orange-100 text-orange-800'
-                      }`}>
+                        }`}>
                         {order.status}
                       </span>
                     </div>
@@ -774,7 +782,7 @@ function App() {
       </div>
 
       {/* ── Custom Orders Special Section ── */}
-      <section className="rounded-2xl border-2 border-dashed border-indigo-200 bg-gradient-to-br from-indigo-50 via-white to-purple-50 p-1.5 shadow-sm">
+      <section className="rounded-2xl border-2 border-dashed border-indigo-200 bg-linear-to-br from-indigo-50 via-white to-purple-50 p-1.5 shadow-sm">
         <div className="mb-3 px-4 pt-4 flex items-center gap-2">
           <span className="text-xl">✨</span>
           <div>
@@ -786,6 +794,8 @@ function App() {
           <CustomOrders
             foods={visibleFoods}
             customerLocation={customerLocation}
+            customerOrders={customerCustomOrders}
+            onTrackOrder={(orderId) => setActiveTrackingOrderId(orderId)}
             onSubmit={async () => {
               await loadCustomerData();
             }}
@@ -892,7 +902,7 @@ function App() {
                   )}
                 </Button>
               )}
-              <div 
+              <div
                 className="hidden text-right sm:block cursor-pointer hover:opacity-80 transition-opacity"
                 onClick={() => setCurrentView(currentView === 'profile' ? 'dashboard' : 'profile')}
               >

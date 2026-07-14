@@ -166,6 +166,10 @@ const DeliveryPanel = () => {
   const activeTasks = acceptedOrders.filter((o) => o.status !== 'Delivered').length;
   const completedCount = acceptedOrders.filter((o) => o.status === 'Delivered').length;
 
+  const activeDeliveries = acceptedOrders.filter((o) => o.status !== 'Delivered');
+  const completedDeliveries = acceptedOrders.filter((o) => o.status === 'Delivered').slice(0, 3);
+  const displayedAcceptedOrders = [...activeDeliveries, ...completedDeliveries];
+
   return (
     <div className="space-y-8">
       {/* Header Banner */}
@@ -234,13 +238,13 @@ const DeliveryPanel = () => {
         <Card>
           <h3 className="mb-5 text-xl font-semibold text-slate-900">My Accepted Deliveries</h3>
           <div className="space-y-4">
-            {acceptedOrders.length === 0 ? (
+            {displayedAcceptedOrders.length === 0 ? (
               <div className="py-8 text-center space-y-2">
                 <Bike className="mx-auto h-10 w-10 text-slate-300" />
                 <p className="text-sm text-slate-400">You haven't accepted any delivery tasks yet.</p>
               </div>
             ) : (
-              acceptedOrders.map((order) => (
+              displayedAcceptedOrders.map((order) => (
                 <div key={order.id} className="rounded-xl border border-slate-200 bg-white p-4 space-y-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>

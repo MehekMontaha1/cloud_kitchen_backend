@@ -40,30 +40,31 @@ const NearbyKitchens = ({ foods, onOrder, onAskAI, hasLocation = true }) => {
     return foods.filter((f) => f.sellerId === selectedKitchenId);
   }, [foods, selectedKitchenId]);
 
-  // Best-selling in-stock items first, using review count as the available sales proxy.
-  const bestSellingItems = useMemo(() => {
-    return [...kitchenItems]
-      .filter((item) => item.stock > 0)
-      .sort((a, b) => {
-        const reviewDiff = (b.reviews || 0) - (a.reviews || 0);
-        if (reviewDiff !== 0) return reviewDiff;
+  // Rank all kitchen items by popularity, then pick the next available in-stock item for each sold-out card.
+  const rankedItems = useMemo(() => {
+    return [...kitchenItems].sort((a, b) => {
+      const reviewDiff = (b.reviews || 0) - (a.reviews || 0);
+      if (reviewDiff !== 0) return reviewDiff;
 
-        const ratingDiff = (b.rating || 0) - (a.rating || 0);
-        if (ratingDiff !== 0) return ratingDiff;
+      const ratingDiff = (b.rating || 0) - (a.rating || 0);
+      if (ratingDiff !== 0) return ratingDiff;
 
-        return (a.name || '').localeCompare(b.name || '');
-      });
+      return (a.name || '').localeCompare(b.name || '');
+    });
   }, [kitchenItems]);
 
-  // Assign one unique best-selling alternative per sold-out item so the same item is not reused.
+  // Assign one unique in-stock alternative per sold-out item so the same item is not reused.
   const alternativeMap = useMemo(() => {
     const usedAlternativeIds = new Set();
 
     return kitchenItems.reduce((acc, item) => {
       if (item.stock > 0) return acc;
 
-      const alternative = bestSellingItems.find(
-        (candidate) => !usedAlternativeIds.has(candidate.id) && candidate.id !== item.id
+      const alternative = rankedItems.find(
+        (candidate) =>
+          candidate.stock > 0 &&
+          !usedAlternativeIds.has(candidate.id) &&
+          candidate.id !== item.id
       ) || null;
 
       if (alternative) {
@@ -73,7 +74,7 @@ const NearbyKitchens = ({ foods, onOrder, onAskAI, hasLocation = true }) => {
       acc[item.id] = alternative;
       return acc;
     }, {});
-  }, [kitchenItems, bestSellingItems]);
+  }, [kitchenItems, rankedItems]);
 
   if (!hasLocation) {
     return (
@@ -215,7 +216,7 @@ const NearbyKitchens = ({ foods, onOrder, onAskAI, hasLocation = true }) => {
                           <div className="text-[10px] text-slate-600 space-y-1 border-t border-rose-100/50 pt-1.5">
                             <span className="font-semibold text-slate-700">💡 Best-selling alternative:</span>
                             <div className="flex items-center justify-between gap-2 bg-white rounded border border-slate-100 p-1.5 mt-1 shadow-2xs">
-                              <span className="font-bold text-slate-800 truncate max-w-[90px]">{alternative.name}</span>
+                              <span className="font-bold text-slate-800 truncate max-w-22.5">{alternative.name}</span>
                               <button
                                 onClick={() => onOrder(alternative)}
                                 className="text-[9px] font-bold text-orange-600 hover:text-white bg-orange-50 hover:bg-orange-600 px-2 py-0.5 rounded transition-all flex items-center gap-0.5"

@@ -29,6 +29,43 @@ const CATEGORY_MAPPING = {
   drinks: { label: 'Drinks', emoji: '🥤', keywords: ['drink', 'beverage', 'juice', 'coffee', 'tea', 'shake', 'soda', 'cola', 'lassi'] }
 };
 
+const normalizeCategoryText = (value = '') => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+
+const getCategoryKey = (value = '', name = '', description = '') => {
+  const normalizedCategory = normalizeCategoryText(value);
+  const normalizedName = normalizeCategoryText(name);
+  const normalizedDescription = normalizeCategoryText(description);
+  const haystack = `${normalizedCategory} ${normalizedName} ${normalizedDescription}`;
+
+  if (!haystack) return 'food';
+
+  if (haystack.includes('cake') || haystack.includes('dessert') || haystack.includes('pastry') || haystack.includes('bakery') || haystack.includes('cupcake') || haystack.includes('muffin') || haystack.includes('waffle') || haystack.includes('sweet') || haystack.includes('ice cream') || haystack.includes('custard')) {
+    return 'cake';
+  }
+
+  if (haystack.includes('drink') || haystack.includes('beverage') || haystack.includes('juice') || haystack.includes('coffee') || haystack.includes('tea') || haystack.includes('shake') || haystack.includes('soda') || haystack.includes('cola') || haystack.includes('lassi')) {
+    return 'drinks';
+  }
+
+  if (haystack.includes('burger') || haystack.includes('pizza') || haystack.includes('fries') || haystack.includes('sandwich') || haystack.includes('fastfood') || haystack.includes('shawarma') || haystack.includes('hotdog') || haystack.includes('pasta')) {
+    return 'fastfood';
+  }
+
+  if (haystack.includes('rice') || haystack.includes('biryani') || haystack.includes('pulao') || haystack.includes('khichuri') || haystack.includes('nasi')) {
+    return 'rice';
+  }
+
+  if (haystack.includes('curry') || haystack.includes('masala') || haystack.includes('korma') || haystack.includes('gravy') || haystack.includes('jhol') || haystack.includes('bhuna') || haystack.includes('tarkari') || haystack.includes('dal')) {
+    return 'curry';
+  }
+
+  if (haystack.includes('food')) {
+    return 'food';
+  }
+
+  return normalizeCategoryText(value) || 'food';
+};
+
 const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLocation, hasLocation = true }) => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [sortBy, setSortBy] = useState('eta');
@@ -69,11 +106,19 @@ const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLo
 
   const categoriesList = useMemo(() => {
     const predefinedKeys = Object.keys(CATEGORY_MAPPING);
-    const otherCats = [...new Set(processedFoods.map((f) => (f.category || '').trim()))]
+    const categoryMap = new Map();
+
+    processedFoods.forEach((food) => {
+      const categoryKey = getCategoryKey(food.category, food.name, food.description);
+      if (!categoryMap.has(categoryKey)) {
+        categoryMap.set(categoryKey, food.category || CATEGORY_MAPPING[categoryKey]?.label || 'Food');
+      }
+    });
+
+    const otherCats = [...categoryMap.entries()]
       .filter((cat) => {
-        if (!cat) return false;
-        const normalized = cat.toLowerCase().replace(/\s+/g, '');
-        return normalized !== 'food' && normalized !== 'all' && !predefinedKeys.includes(normalized);
+        const [key] = cat;
+        return key && key !== 'food' && key !== 'all' && !predefinedKeys.includes(key);
       });
 
     return [
@@ -83,9 +128,9 @@ const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLo
         emoji: item.emoji,
         isPredefined: true
       })),
-      ...otherCats.map((cat) => ({
-        key: cat,
-        label: cat,
+      ...otherCats.map(([key, label]) => ({
+        key,
+        label,
         emoji: '🍱',
         isPredefined: false
       }))
@@ -101,19 +146,7 @@ const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLo
     }
 
     if (selectedCategory !== 'all') {
-      const mapping = CATEGORY_MAPPING[selectedCategory];
-      if (mapping) {
-        result = result.filter((f) => {
-          const foodCat = (f.category || '').toLowerCase().replace(/\s+/g, '');
-          const foodName = (f.name || '').toLowerCase();
-          const foodDesc = (f.description || '').toLowerCase();
-
-          if (foodCat === selectedCategory) return true;
-          return mapping.keywords.some(kw => foodName.includes(kw) || foodDesc.includes(kw));
-        });
-      } else {
-        result = result.filter((f) => (f.category || '').toLowerCase().trim() === selectedCategory.toLowerCase().trim());
-      }
+      result = result.filter((f) => getCategoryKey(f.category, f.name, f.description) === selectedCategory);
     }
 
     if (sortBy === 'eta') {
@@ -261,8 +294,8 @@ const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLo
                 key={cat.key}
                 onClick={() => setSelectedCategory(cat.key)}
                 className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-semibold transition-all hover:scale-105 ${isSelected
-                    ? 'bg-slate-900 text-white shadow-sm'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  ? 'bg-slate-900 text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
               >
                 <span>{cat.emoji}</span>
@@ -392,55 +425,78 @@ const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLo
         isOpen={isReviewsOpen}
         onClose={() => setIsReviewsOpen(false)}
         title={reviewsTargetSeller ? `${reviewsTargetSeller.name} - Verified Reviews` : 'Reviews'}
-        size="lg"
+        size="xl"
       >
-        <div className="space-y-6 sm:max-h-[500px] sm:overflow-y-auto sm:pr-1">
-          {/* Reviews List */}
-          <div className="space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Customer Feedback</h3>
+        <div className="mx-auto w-full max-w-3xl space-y-4">
+          <div className="rounded-3xl border border-slate-100 bg-linear-to-r from-slate-50 via-white to-emerald-50/60 p-4 shadow-sm sm:p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="max-w-xl">
+                <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-emerald-600">Verified Review Center</p>
+                <h3 className="mt-1 text-lg font-bold text-slate-900">Rate this kitchen and leave a verified review</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Only completed orders can post reviews. Keep it short, honest, and helpful.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 shrink-0">
+                <div className="rounded-2xl border border-slate-100 bg-white px-3 py-2 text-center shadow-sm min-w-20">
+                  <div className="text-2xl font-black text-slate-900">{reviewsList.length}</div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Reviews</div>
+                </div>
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-center shadow-sm min-w-20">
+                  <div className="text-2xl font-black text-emerald-700">{reviewsList.length > 0 ? Math.round(reviewsList.reduce((sum, rev) => sum + rev.rating, 0) / reviewsList.length) : 0}</div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-600">Avg</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3 max-h-[34vh] overflow-y-auto pr-1 sm:max-h-[38vh]">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Customer Feedback</h3>
+              <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-500">
+                {reviewsList.length} review{reviewsList.length === 1 ? '' : 's'}
+              </span>
+            </div>
             {reviewsLoading ? (
-              <div className="py-4 text-center text-xs text-slate-500">Loading reviews...</div>
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 py-10 text-center text-xs text-slate-500">Loading reviews...</div>
             ) : reviewsList.length === 0 ? (
-              <div className="py-6 text-center rounded-xl bg-slate-50 border border-dashed border-slate-200">
-                <p className="text-xs text-slate-500">No reviews yet for this kitchen.</p>
-                <p className="text-[10px] text-slate-400 mt-1">Be the first to place a completed order and write a verified review!</p>
+              <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 py-10 text-center">
+                <p className="text-sm font-medium text-slate-700">No reviews yet for this kitchen.</p>
+                <p className="mt-1 text-[10px] text-slate-400">Be the first to place a completed order and write a verified review!</p>
               </div>
             ) : (
               <div className="space-y-3">
                 {reviewsList.map((rev) => (
-                  <div key={rev.id} className="border border-slate-100 bg-slate-50/50 rounded-xl p-3.5 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-800">{rev.customer_name}</span>
+                  <div key={rev.id} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm space-y-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-semibold text-slate-800">{rev.customer_name}</span>
                       <span className="text-[10px] text-slate-400">
                         {new Date(rev.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
                       </span>
                     </div>
-                    {/* Rating stars display */}
                     <div className="flex items-center gap-0.5">
                       {[...Array(5)].map((_, i) => (
                         <Star
                           key={i}
-                          className={`h-3 w-3 ${i < rev.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-200'
-                            }`}
+                          className={`h-3.5 w-3.5 ${i < rev.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-200'}`}
                         />
                       ))}
-                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded ml-1">
+                      <span className="ml-2 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">
                         Verified Purchase
                       </span>
                     </div>
-                    <p className="text-xs text-slate-600 mt-1">{rev.comment}</p>
+                    <p className="text-xs leading-5 text-slate-600">{rev.comment}</p>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* Review Submission Form */}
-          <form onSubmit={handleSubmitReview} className="border-t border-slate-100 pt-5 space-y-3">
+          <form onSubmit={handleSubmitReview} className="space-y-4 rounded-3xl border border-slate-100 bg-white p-4 shadow-sm">
             <div>
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-800">Write a Verified Review</h3>
-              <p className="text-[10px] text-slate-500 mt-0.5">
-                Only customers with a completed order from this kitchen can post reviews.
+              <p className="mt-1 text-[10px] text-slate-500">
+                Share your experience after a completed order from this kitchen.
               </p>
             </div>
 
@@ -464,10 +520,10 @@ const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLo
                     key={stars}
                     type="button"
                     onClick={() => setNewRating(stars)}
-                    className="p-0.5 rounded focus:outline-none"
+                    className="rounded-full p-0.5 focus:outline-none"
                   >
                     <Star
-                      className={`h-6 w-6 transition-all ${stars <= newRating ? 'fill-amber-400 text-amber-400 scale-110' : 'text-slate-300'
+                      className={`h-7 w-7 transition-all ${stars <= newRating ? 'fill-amber-400 text-amber-400 scale-110' : 'text-slate-300'
                         }`}
                     />
                   </button>
@@ -481,21 +537,32 @@ const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLo
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
                 placeholder="Share your experience (e.g. food taste, preparation speed)..."
-                rows={3}
+                rows={4}
                 required
-                className="w-full rounded-xl border border-slate-200 p-3 text-xs focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                className="w-full rounded-2xl border border-slate-200 p-3 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"
               />
             </div>
 
-            <Button
-              type="submit"
-              variant="primary"
-              size="sm"
-              className="w-full rounded-xl py-2"
-              disabled={submittingReview}
-            >
-              {submittingReview ? 'Verifying & Posting...' : 'Post Review'}
-            </Button>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="w-full rounded-2xl py-3"
+                onClick={() => setIsReviewsOpen(false)}
+              >
+                Close
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                className="w-full rounded-2xl py-3"
+                disabled={submittingReview}
+              >
+                {submittingReview ? 'Verifying & Posting...' : 'Post Review'}
+              </Button>
+            </div>
           </form>
         </div>
       </Modal>

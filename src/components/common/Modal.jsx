@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { useEffect, useRef } from 'react';
 
 const Modal = ({
   isOpen,
@@ -8,6 +9,8 @@ const Modal = ({
   size = 'md',
   showClose = true,
 }) => {
+  const panelRef = useRef(null);
+
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -29,32 +32,39 @@ const Modal = ({
     return () => window.removeEventListener('keydown', handleEsc);
   }, [isOpen, onClose]);
 
+  useEffect(() => {
+    if (isOpen && panelRef.current) {
+      panelRef.current.scrollTop = 0;
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const sizes = {
     sm: 'max-w-sm',
     md: 'max-w-md',
     lg: 'max-w-lg',
-    xl: 'max-w-xl',
-    full: 'max-w-4xl',
+    xl: 'max-w-4xl',
+    full: 'max-w-6xl',
   };
 
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
+  return createPortal(
+    <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain">
       <div
         className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity"
         onClick={onClose}
       />
-      <div className="flex min-h-full items-end justify-center p-2 sm:items-center sm:p-4">
+      <div className="relative flex min-h-full items-start justify-center px-4 py-4 sm:items-center sm:px-6 sm:py-6">
         <div
+          ref={panelRef}
           className={`
-            relative flex max-h-[calc(100dvh-1rem)] w-full ${sizes[size]} flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl transform transition-all
-            sm:max-h-[calc(100dvh-2rem)] sm:rounded-2xl
+            relative flex max-h-[calc(100dvh-2rem)] w-full ${sizes[size]} flex-col overflow-hidden rounded-3xl bg-white shadow-2xl transform transition-all
+            sm:max-h-[calc(100dvh-3rem)]
           `}
           onClick={(e) => e.stopPropagation()}
         >
           {(title || showClose) && (
-            <div className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:items-center sm:px-6 sm:py-4">
+            <div className="flex items-start justify-between gap-3 border-b border-slate-100 bg-white px-4 py-3 sm:items-center sm:px-6 sm:py-4">
               {title && (
                 <h2 className="max-w-[calc(100%-2.5rem)] text-base font-semibold leading-snug text-slate-900 sm:text-lg">
                   {title}
@@ -76,7 +86,8 @@ const Modal = ({
           <div className="flex-1 overflow-y-auto p-4 sm:p-6">{children}</div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

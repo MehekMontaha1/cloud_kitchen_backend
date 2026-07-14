@@ -180,8 +180,8 @@ const ShoppingCart = ({ items, onRemove, onCheckout }) => {
                 type="button"
                 onClick={() => setPaymentMethod('stripe')}
                 className={`rounded-2xl border p-4 text-left transition-all ${paymentMethod === 'stripe'
-                    ? 'border-indigo-300 bg-indigo-50 ring-2 ring-indigo-100'
-                    : 'border-slate-200 bg-white hover:border-slate-300'
+                  ? 'border-indigo-300 bg-indigo-50 ring-2 ring-indigo-100'
+                  : 'border-slate-200 bg-white hover:border-slate-300'
                   }`}
               >
                 <div className="flex items-start justify-between gap-3">
@@ -197,8 +197,8 @@ const ShoppingCart = ({ items, onRemove, onCheckout }) => {
                 type="button"
                 onClick={() => setPaymentMethod('cash_on_delivery')}
                 className={`rounded-2xl border p-4 text-left transition-all ${paymentMethod === 'cash_on_delivery'
-                    ? 'border-emerald-300 bg-emerald-50 ring-2 ring-emerald-100'
-                    : 'border-slate-200 bg-white hover:border-slate-300'
+                  ? 'border-emerald-300 bg-emerald-50 ring-2 ring-emerald-100'
+                  : 'border-slate-200 bg-white hover:border-slate-300'
                   }`}
               >
                 <div className="flex items-start justify-between gap-3">
