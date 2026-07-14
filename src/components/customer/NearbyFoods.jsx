@@ -12,9 +12,9 @@ function calculateDistanceKm(lat1, lon1, lat2, lon2) {
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return parseFloat((R * c).toFixed(1));
 }
@@ -260,11 +260,10 @@ const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLo
               <button
                 key={cat.key}
                 onClick={() => setSelectedCategory(cat.key)}
-                className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-semibold transition-all hover:scale-105 ${
-                  isSelected
+                className={`flex items-center gap-1.5 rounded-full px-4 py-1.5 text-sm font-semibold transition-all hover:scale-105 ${isSelected
                     ? 'bg-slate-900 text-white shadow-sm'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
+                  }`}
               >
                 <span>{cat.emoji}</span>
                 <span>{cat.label}</span>
@@ -312,9 +311,8 @@ const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLo
                       <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">
                         {item.category || 'Food'}
                       </span>
-                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                        item.stock > 0 ? 'bg-orange-100 text-orange-800' : 'bg-rose-100 text-rose-800'
-                      }`}>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${item.stock > 0 ? 'bg-orange-100 text-orange-800' : 'bg-rose-100 text-rose-800'
+                        }`}>
                         {item.stock > 0 ? `Stock: ${item.stock}` : 'Out of Stock'}
                       </span>
                     </div>
@@ -396,7 +394,7 @@ const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLo
         title={reviewsTargetSeller ? `${reviewsTargetSeller.name} - Verified Reviews` : 'Reviews'}
         size="lg"
       >
-        <div className="space-y-6 max-h-[500px] overflow-y-auto pr-1">
+        <div className="space-y-6 sm:max-h-[500px] sm:overflow-y-auto sm:pr-1">
           {/* Reviews List */}
           <div className="space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Customer Feedback</h3>
@@ -422,9 +420,8 @@ const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLo
                       {[...Array(5)].map((_, i) => (
                         <Star
                           key={i}
-                          className={`h-3 w-3 ${
-                            i < rev.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-200'
-                          }`}
+                          className={`h-3 w-3 ${i < rev.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-200'
+                            }`}
                         />
                       ))}
                       <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1 rounded ml-1">
@@ -470,9 +467,8 @@ const NearbyFoods = ({ foods, showNearbyOnly, onToggle, onOrder, onAskAI, userLo
                     className="p-0.5 rounded focus:outline-none"
                   >
                     <Star
-                      className={`h-6 w-6 transition-all ${
-                        stars <= newRating ? 'fill-amber-400 text-amber-400 scale-110' : 'text-slate-300'
-                      }`}
+                      className={`h-6 w-6 transition-all ${stars <= newRating ? 'fill-amber-400 text-amber-400 scale-110' : 'text-slate-300'
+                        }`}
                     />
                   </button>
                 ))}
