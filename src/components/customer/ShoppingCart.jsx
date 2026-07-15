@@ -3,32 +3,17 @@ import { Card, Button, Badge, Modal } from '../common';
 
 const formatPrice = (price) => `৳${price.toFixed(2)}`;
 
-const ShoppingCart = ({ items, onRemove, onCheckout }) => {
+const ShoppingCart = ({ items, onRemove, onUpdateQuantity, onCheckout }) => {
   const [showCheckout, setShowCheckout] = useState(false);
-  const [promoCode, setPromoCode] = useState('');
-  const [promoApplied, setPromoApplied] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState('stripe');
 
   const subtotal = useMemo(() => {
-    return items.reduce((sum, item) => sum + item.price, 0);
+    return items.reduce((sum, item) => sum + (item.price * (item.quantity || 1)), 0);
   }, [items]);
 
   const deliveryFee = items.length > 0 ? 2.99 : 0;
   const serviceFee = items.length > 0 ? subtotal * 0.05 : 0;
-  const discount = promoApplied ? (promoApplied.type === 'percentage' ? subtotal * (promoApplied.discount / 100) : promoApplied.discount) : 0;
-  const total = subtotal + deliveryFee + serviceFee - discount;
-
-  const handleApplyPromo = () => {
-    if (promoCode.toUpperCase() === 'FIRSTORDER10') {
-      setPromoApplied({ code: 'FIRSTORDER10', discount: 10, type: 'percentage' });
-    } else if (promoCode.toUpperCase() === 'FLAVOR15') {
-      setPromoApplied({ code: 'FLAVOR15', discount: 15, type: 'percentage' });
-    } else if (promoCode.toUpperCase() === 'NEWUSER20') {
-      setPromoApplied({ code: 'NEWUSER20', discount: 5, type: 'fixed' });
-    } else {
-      setPromoApplied({ code: promoCode, discount: 0, type: 'invalid' });
-    }
-  };
+  const total = subtotal + deliveryFee + serviceFee;
 
   const handleCheckout = () => {
     onCheckout(paymentMethod);
@@ -62,7 +47,7 @@ const ShoppingCart = ({ items, onRemove, onCheckout }) => {
         <div>
           <h2 className="text-xl font-semibold text-slate-900">Shopping Cart</h2>
           <p className="mt-1 text-sm text-slate-500">
-            {items.length} item{items.length > 1 ? 's' : ''} in your cart
+            {items.length} unique item{items.length > 1 ? 's' : ''} in your cart
           </p>
         </div>
         <Button variant="secondary" size="sm" onClick={() => onRemove(null)}>
@@ -71,9 +56,9 @@ const ShoppingCart = ({ items, onRemove, onCheckout }) => {
       </div>
 
       <div className="space-y-3">
-        {items.map((item, index) => (
+        {items.map((item) => (
           <div
-            key={`${item.id}-${index}`}
+            key={item.id}
             className="flex items-center gap-4 rounded-xl border border-slate-200 bg-white p-4"
           >
             <img
@@ -86,45 +71,52 @@ const ShoppingCart = ({ items, onRemove, onCheckout }) => {
             />
             <div className="flex-1 min-w-0">
               <h4 className="font-medium text-slate-900 truncate">{item.name}</h4>
-              <p className="text-sm text-slate-500">{item.seller}</p>
-              <Badge variant="default" size="sm" className="mt-1">
-                {item.eta} min delivery
-              </Badge>
+              <p className="text-xs text-slate-500 mb-1">{item.seller}</p>
+              <div className="flex items-center gap-2">
+                <Badge variant="default" size="sm">
+                  {item.eta} min delivery
+                </Badge>
+                <span className="text-[10px] font-semibold text-slate-400">
+                  Stock: {item.stock}
+                </span>
+              </div>
             </div>
-            <div className="text-right">
-              <p className="font-semibold text-slate-900">{formatPrice(item.price)}</p>
-              <button
-                onClick={() => onRemove(item.id)}
-                className="mt-1 text-xs text-rose-500 hover:text-rose-600"
-              >
-                Remove
-              </button>
+            <div className="flex items-center gap-4">
+              {/* Quantity Selector */}
+              <div className="flex items-center rounded-lg border border-slate-200 bg-slate-50 p-1">
+                <button
+                  onClick={() => onUpdateQuantity(item.id, (item.quantity || 1) - 1)}
+                  className="flex h-6 w-6 items-center justify-center rounded bg-white text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-100 transition-colors"
+                >
+                  -
+                </button>
+                <span className="w-8 text-center text-xs font-bold text-slate-800">
+                  {item.quantity || 1}
+                </span>
+                <button
+                  onClick={() => onUpdateQuantity(item.id, (item.quantity || 1) + 1)}
+                  className="flex h-6 w-6 items-center justify-center rounded bg-white text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-100 transition-colors"
+                >
+                  +
+                </button>
+              </div>
+
+              {/* Price and Remove */}
+              <div className="text-right min-w-[70px]">
+                <p className="font-semibold text-slate-900">{formatPrice(item.price * (item.quantity || 1))}</p>
+                <button
+                  onClick={() => onRemove(item.id)}
+                  className="mt-1 text-xs text-rose-500 hover:text-rose-600 underline hover:no-underline"
+                >
+                  Remove
+                </button>
+              </div>
             </div>
           </div>
         ))}
       </div>
 
-      <div className="mt-6 rounded-xl bg-slate-50 p-4">
-        <div className="mb-3 flex gap-2">
-          <input
-            type="text"
-            placeholder="Promo code"
-            value={promoCode}
-            onChange={(e) => setPromoCode(e.target.value)}
-            className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm"
-          />
-          <Button variant="secondary" size="sm" onClick={handleApplyPromo}>
-            Apply
-          </Button>
-        </div>
-        {promoApplied && (
-          <div className={`text-sm ${promoApplied.discount > 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
-            {promoApplied.discount > 0
-              ? `Code ${promoApplied.code} applied! You save ${formatPrice(discount)}`
-              : `Invalid promo code: ${promoApplied.code}`}
-          </div>
-        )}
-      </div>
+
 
       <div className="mt-6 space-y-2 border-t border-slate-200 pt-4">
         <div className="flex justify-between text-sm text-slate-500">
@@ -139,12 +131,7 @@ const ShoppingCart = ({ items, onRemove, onCheckout }) => {
           <span>Service Fee</span>
           <span>{formatPrice(serviceFee)}</span>
         </div>
-        {discount > 0 && (
-          <div className="flex justify-between text-sm text-emerald-600">
-            <span>Discount</span>
-            <span>-{formatPrice(discount)}</span>
-          </div>
-        )}
+
         <div className="flex justify-between text-lg font-semibold text-slate-900 pt-2 border-t border-slate-200">
           <span>Total</span>
           <span>{formatPrice(total)}</span>

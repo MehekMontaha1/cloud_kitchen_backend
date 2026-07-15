@@ -1,4 +1,15 @@
 {
   "/api/chats/route": "app/api/chats/route.js",
-  "/api/reviews/route": "app/api/reviews/route.js"
+  "/api/ai/history/route": "app/api/ai/history/route.js",
+  "/api/users/profile/route": "app/api/users/profile/route.js",
+  "/api/customer/flash-deals/route": "app/api/customer/flash-deals/route.js",
+  "/api/customer/foods/route": "app/api/customer/foods/route.js",
+  "/api/orders/route": "app/api/orders/route.js",
+  "/api/customer/messages/route": "app/api/customer/messages/route.js",
+  "/api/customer/custom-orders/route": "app/api/customer/custom-orders/route.js",
+  "/api/auth/logout/route": "app/api/auth/logout/route.js",
+  "/api/delivery/available/route": "app/api/delivery/available/route.js",
+  "/api/delivery/accepted/route": "app/api/delivery/accepted/route.js",
+  "/api/auth/login/route": "app/api/auth/login/route.js",
+  "/api/delivery/messages/route": "app/api/delivery/messages/route.js"
 }

@@ -1,4 +1,5 @@
 import { supabaseAdmin } from './supabase';
+import { autoCancelStaleOrders } from './orders';
 
 // Helper: fetch rider profile (service-role to bypass RLS)
 async function getRiderProfile(riderId: string) {
@@ -18,6 +19,7 @@ async function getRiderProfile(riderId: string) {
 // 1. Fetch available orders matching rider's location with full seller & customer coordinates
 export async function getAvailableOrdersForRider(riderId: string) {
   try {
+    await autoCancelStaleOrders();
     const rider = await getRiderProfile(riderId);
 
     const { data: orders, error } = await supabaseAdmin
@@ -61,6 +63,7 @@ export async function getAvailableOrdersForRider(riderId: string) {
 // 2. Fetch accepted orders for a specific rider
 export async function getAcceptedOrdersForRider(riderId: string) {
   try {
+    await autoCancelStaleOrders();
     const { data, error } = await supabaseAdmin
       .from('orders')
       .select(`

@@ -19,7 +19,7 @@ export async function PUT(
     }
 
     const { itemId } = await params;
-    const contentType = request.headers.get('content-type') || '';
+    const contentType = (request.headers.get('content-type') || '').toLowerCase();
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData();
@@ -29,7 +29,7 @@ export async function PUT(
       const description = formData.get('description') as string;
       const category = formData.get('category') as string;
       const status = formData.get('status') as string;
-      const file = formData.get('file') as File | null;
+      const fileEntry = formData.get('file');
 
       const updates: any = {};
       if (name) updates.name = name;
@@ -46,11 +46,12 @@ export async function PUT(
       if (status) updates.status = status;
 
       // Handle image upload if a file was provided
-      if (file && file.size > 0) {
+      if (fileEntry && typeof fileEntry !== 'string' && 'size' in fileEntry && (fileEntry as any).size > 0) {
+        const file = fileEntry as File;
         const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
         if (!allowedTypes.includes(file.type)) {
           return NextResponse.json(
-            { error: 'Invalid image type. Allowed types: JPEG, PNG, WEBP, GIF' },
+            { error: `Invalid image type: ${file.type}. Allowed types: JPEG, PNG, WEBP, GIF` },
             { status: 400 }
           );
         }
@@ -58,7 +59,7 @@ export async function PUT(
         const maxSize = 5 * 1024 * 1024;
         if (file.size > maxSize) {
           return NextResponse.json(
-            { error: 'Image too large. Maximum size: 5MB' },
+            { error: `Image too large (${(file.size / 1024 / 1024).toFixed(2)}MB). Maximum size: 5MB` },
             { status: 400 }
           );
         }
@@ -92,12 +93,14 @@ export async function PUT(
         updates.image_url = urlData.publicUrl;
       }
 
+      console.log('[API Menu PUT] Saving updates:', updates, 'for itemId:', itemId);
       const updatedItem = await updateMenuItem(user.id, itemId, updates);
       return NextResponse.json({ success: true, data: updatedItem }, { status: 200 });
     }
 
     if (contentType.includes('application/json')) {
       const body = await request.json();
+      console.log('[API Menu PUT] JSON Body updates:', body, 'for itemId:', itemId);
       const updatedItem = await updateMenuItem(user.id, itemId, body);
       return NextResponse.json({ success: true, data: updatedItem }, { status: 200 });
     }

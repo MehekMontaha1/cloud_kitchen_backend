@@ -19,6 +19,15 @@ const statusLabelMap = {
 
 const CustomOrders = ({ foods = [], customerLocation = null, onSubmit, customerOrders = [], onTrackOrder }) => {
   const hasDeliveryLocation = Boolean(customerLocation?.lat && customerLocation?.lng);
+  const [customTab, setCustomTab] = useState('active');
+
+  const activeCustom = useMemo(() => {
+    return customerOrders.filter(o => o.status !== 'Delivered' && o.status !== 'Cancelled');
+  }, [customerOrders]);
+
+  const pastCustom = useMemo(() => {
+    return customerOrders.filter(o => o.status === 'Delivered' || o.status === 'Cancelled');
+  }, [customerOrders]);
 
   // Extract unique kitchens from nearby foods to direct the custom order request
   const kitchens = useMemo(() => {
@@ -154,80 +163,130 @@ const CustomOrders = ({ foods = [], customerLocation = null, onSubmit, customerO
 
         {customerOrders.length > 0 && (
           <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-4 space-y-3">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3 mb-2">
               <div>
                 <h3 className="text-sm font-bold text-slate-900">Your custom order updates</h3>
                 <p className="text-xs text-slate-500">Accepted requests move from kitchen prep to delivery-ready automatically.</p>
               </div>
-              <span className="rounded-full bg-indigo-100 px-2.5 py-1 text-[10px] font-bold text-indigo-700">
-                {customerOrders.length} request{customerOrders.length === 1 ? '' : 's'}
-              </span>
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setCustomTab('active')}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                    customTab === 'active'
+                      ? 'bg-indigo-100 text-indigo-700'
+                      : 'text-slate-500 hover:bg-slate-200/50'
+                  }`}
+                >
+                  Active ({activeCustom.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCustomTab('past')}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all ${
+                    customTab === 'past'
+                      ? 'bg-indigo-100 text-indigo-700'
+                      : 'text-slate-500 hover:bg-slate-200/50'
+                  }`}
+                >
+                  History ({pastCustom.length})
+                </button>
+              </div>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2">
-              {customerOrders.map((order) => {
-                const linkedOrderId = order.details?.related_order_id || order.details?.linked_order_id || null;
-                const friendlyStatus = statusLabelMap[order.status] || order.status;
-                return (
-                  <div key={order.id} className={`rounded-2xl border p-4 ${order.status === 'Cancelled'
-                      ? 'border-rose-200 bg-rose-50/40'
-                      : order.status === 'Ready'
-                        ? 'border-emerald-200 bg-emerald-50/40'
-                        : order.status === 'Preparing'
-                          ? 'border-indigo-200 bg-indigo-50/40'
-                          : 'border-amber-200 bg-amber-50/40'
-                    }`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-slate-900">{order.item_name}</p>
-                        <p className="mt-0.5 text-xs text-slate-500">{order.details?.description || order.description}</p>
+            {customTab === 'active' ? (
+              activeCustom.length === 0 ? (
+                <p className="text-xs text-slate-500 text-center py-6">No active custom orders.</p>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {activeCustom.map((order) => {
+                    const linkedOrderId = order.details?.related_order_id || order.details?.linked_order_id || null;
+                    const friendlyStatus = statusLabelMap[order.status] || order.status;
+                    return (
+                      <div key={order.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-slate-900">{order.item_name}</p>
+                            <p className="mt-0.5 text-xs text-slate-500">{order.details?.description || order.description}</p>
+                          </div>
+                          <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold bg-amber-100 text-amber-700`}>
+                            {friendlyStatus}
+                          </span>
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] font-semibold text-slate-500">
+                          <span className="rounded-full bg-slate-50 px-2 py-1 border border-slate-200">Budget ৳{Number(order.budget || 0).toFixed(2)}</span>
+                          <span className="rounded-full bg-slate-50 px-2 py-1 border border-slate-200">{order.urgency || order.details?.urgency || 'standard'}</span>
+                          {linkedOrderId && (
+                            <span className="rounded-full bg-slate-50 px-2 py-1 border border-slate-200">Delivery linked</span>
+                          )}
+                        </div>
+
+                        <div className="mt-3 flex items-center justify-between gap-3">
+                          <p className="text-[11px] text-slate-500">
+                            {order.status === 'Ready'
+                              ? 'A rider can accept this now.'
+                              : order.status === 'Accepted'
+                              ? 'Rider is on the way to pick up your order.'
+                              : order.status === 'Picked Up'
+                              ? 'Rider is on the way to you!'
+                              : 'We will update you as the kitchen progresses.'}
+                          </p>
+                          {linkedOrderId && order.status !== 'Delivered' && order.status !== 'Cancelled' && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => onTrackOrder && onTrackOrder(linkedOrderId)}
+                            >
+                              Track delivery
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                      <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${order.status === 'Cancelled'
-                          ? 'bg-rose-100 text-rose-700'
-                          : order.status === 'Ready'
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : order.status === 'Preparing'
-                              ? 'bg-indigo-100 text-indigo-700'
-                              : 'bg-amber-100 text-amber-700'
-                        }`}>
-                        {friendlyStatus}
-                      </span>
-                    </div>
+                    );
+                  })}
+                </div>
+              )
+            ) : (
+              pastCustom.length === 0 ? (
+                <p className="text-xs text-slate-500 text-center py-6">No custom order history.</p>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {pastCustom.map((order) => {
+                    const friendlyStatus = statusLabelMap[order.status] || order.status;
+                    const isRejected = order.status === 'Cancelled';
+                    return (
+                      <div key={order.id} className={`rounded-2xl border p-4 bg-white ${
+                        isRejected ? 'border-rose-100 bg-rose-50/10' : 'border-slate-200'
+                      }`}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-slate-800">{order.item_name}</p>
+                            <p className="mt-0.5 text-xs text-slate-400">{order.details?.description || order.description}</p>
+                          </div>
+                          <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                            isRejected ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'
+                          }`}>
+                            {friendlyStatus}
+                          </span>
+                        </div>
 
-                    <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] font-semibold text-slate-500">
-                      <span className="rounded-full bg-white px-2 py-1 border border-slate-200">Budget ৳{Number(order.budget || 0).toFixed(2)}</span>
-                      <span className="rounded-full bg-white px-2 py-1 border border-slate-200">{order.urgency || order.details?.urgency || 'standard'}</span>
-                      {linkedOrderId && (
-                        <span className="rounded-full bg-white px-2 py-1 border border-slate-200">Delivery linked</span>
-                      )}
-                    </div>
+                        <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] font-semibold text-slate-500">
+                          <span className="rounded-full bg-slate-50 px-2 py-1 border border-slate-200">Budget ৳{Number(order.budget || 0).toFixed(2)}</span>
+                          <span className="rounded-full bg-slate-50 px-2 py-1 border border-slate-200">{order.urgency || order.details?.urgency || 'standard'}</span>
+                        </div>
 
-                    <div className="mt-3 flex items-center justify-between gap-3">
-                      <p className="text-[11px] text-slate-500">
-                        {order.status === 'Ready'
-                          ? 'A rider can accept this now.'
-                          : order.status === 'Accepted'
-                          ? 'Rider is on the way to pick up your order.'
-                          : order.status === 'Picked Up'
-                          ? 'Rider is on the way to you!'
-                          : order.status === 'Delivered'
-                          ? 'Enjoy your food!'
-                          : 'We will update you as the kitchen progresses.'}
-                      </p>
-                      {linkedOrderId && order.status !== 'Delivered' && order.status !== 'Cancelled' && (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => onTrackOrder && onTrackOrder(linkedOrderId)}
-                        >
-                          Track delivery
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                        <div className="mt-3 flex items-center justify-between gap-3">
+                          <p className="text-[11px] text-slate-500">
+                            {isRejected ? 'This custom order was rejected or cancelled.' : 'This custom order was successfully delivered!'}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            )}
           </div>
         )}
 

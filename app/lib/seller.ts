@@ -1,4 +1,5 @@
 import { supabaseAdmin } from './supabase';
+import { autoCancelStaleOrders, autoCancelStaleCustomOrders } from './orders';
 
 // 1. Fetch menu items for a seller
 export async function getSellerMenu(sellerId: string) {
@@ -111,6 +112,8 @@ export async function toggleMenuItemStatus(sellerId: string, itemId: string) {
 // 4. Fetch orders for a seller
 export async function getSellerOrders(sellerId: string) {
   try {
+    await autoCancelStaleOrders();
+
     // Fetch orders and select profiles (customers) joined on customer_id
     const { data, error } = await supabaseAdmin
       .from('orders')
@@ -119,7 +122,6 @@ export async function getSellerOrders(sellerId: string) {
         customer:profiles!customer_id(full_name, email)
       `)
       .eq('seller_id', sellerId)
-      .neq('status', 'Cancelled')
       .or('payment_status.eq.paid,payment_method.eq.cash_on_delivery')
       .order('created_at', { ascending: false });
 
@@ -134,6 +136,8 @@ export async function getSellerOrders(sellerId: string) {
 // 4b. Fetch custom order requests for a seller
 export async function getSellerCustomOrders(sellerId: string) {
   try {
+    await autoCancelStaleCustomOrders();
+
     const { data, error } = await supabaseAdmin
       .from('custom_orders')
       .select(`

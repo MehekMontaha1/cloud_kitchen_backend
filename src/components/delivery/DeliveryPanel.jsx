@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Bike, CheckCircle2, MapPin, PackageCheck, Route, MessageSquare, ShoppingBag } from 'lucide-react';
 import { Badge, Button, Card, DeliveryRouteMap, MapPicker } from '../common';
 import InboxMessaging from '../customer/InboxMessaging';
@@ -8,6 +8,15 @@ const statusFlow = ['Accepted', 'Picked Up', 'Delivered'];
 const DeliveryPanel = () => {
   const [availableOrders, setAvailableOrders] = useState([]);
   const [acceptedOrders, setAcceptedOrders] = useState([]);
+  const [deliveryTab, setDeliveryTab] = useState('active');
+
+  const activeDeliveries = useMemo(() => {
+    return acceptedOrders.filter((o) => o.status !== 'Delivered');
+  }, [acceptedOrders]);
+
+  const completedDeliveries = useMemo(() => {
+    return acceptedOrders.filter((o) => o.status === 'Delivered');
+  }, [acceptedOrders]);
   const [messages, setMessages] = useState([]);
   const [replyText, setReplyText] = useState('');
   const [sendingMsg, setSendingMsg] = useState(false);
@@ -163,12 +172,8 @@ const DeliveryPanel = () => {
   }
 
   // Calculate dynamic stats
-  const activeTasks = acceptedOrders.filter((o) => o.status !== 'Delivered').length;
-  const completedCount = acceptedOrders.filter((o) => o.status === 'Delivered').length;
-
-  const activeDeliveries = acceptedOrders.filter((o) => o.status !== 'Delivered');
-  const completedDeliveries = acceptedOrders.filter((o) => o.status === 'Delivered').slice(0, 3);
-  const displayedAcceptedOrders = [...activeDeliveries, ...completedDeliveries];
+  const activeTasks = activeDeliveries.length;
+  const completedCount = completedDeliveries.length;
 
   return (
     <div className="space-y-8">
@@ -236,61 +241,114 @@ const DeliveryPanel = () => {
       <section className="grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
         {/* Accepted Orders (Rider's own list) */}
         <Card>
-          <h3 className="mb-5 text-xl font-semibold text-slate-900">My Accepted Deliveries</h3>
+          <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-5">
+            <h3 className="text-xl font-semibold text-slate-900">My Deliveries</h3>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setDeliveryTab('active')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  deliveryTab === 'active'
+                    ? 'bg-orange-100 text-orange-700'
+                    : 'text-slate-500 hover:bg-slate-100'
+                }`}
+              >
+                Active ({activeTasks})
+              </button>
+              <button
+                onClick={() => setDeliveryTab('completed')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  deliveryTab === 'completed'
+                    ? 'bg-orange-100 text-orange-700'
+                    : 'text-slate-500 hover:bg-slate-100'
+                }`}
+              >
+                Completed ({completedCount})
+              </button>
+            </div>
+          </div>
+
           <div className="space-y-4">
-            {displayedAcceptedOrders.length === 0 ? (
-              <div className="py-8 text-center space-y-2">
-                <Bike className="mx-auto h-10 w-10 text-slate-300" />
-                <p className="text-sm text-slate-400">You haven't accepted any delivery tasks yet.</p>
-              </div>
-            ) : (
-              displayedAcceptedOrders.map((order) => (
-                <div key={order.id} className="rounded-xl border border-slate-200 bg-white p-4 space-y-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs text-slate-400 font-mono">ID: {order.id}</p>
-                      <p className="font-semibold text-slate-900 mt-1">Item: {order.item_name}</p>
-                      <p className="mt-2 flex items-start gap-2 text-sm text-slate-600">
-                        <MapPin className="h-4 w-4 mt-0.5 text-slate-400" />
-                        <span>Pickup: <strong>{order.seller?.full_name || 'Kitchen'}</strong> ({order.seller?.location || 'Dhaka'})</span>
-                      </p>
-                      <p className="mt-1 flex items-start gap-2 text-sm text-slate-600">
-                        <MapPin className="h-4 w-4 mt-0.5 text-slate-400" />
-                        <span>Dropoff: {order.customer?.full_name || 'Customer'}</span>
-                      </p>
-                    </div>
-                    <Badge variant={order.status === 'Delivered' ? 'success' : 'warning'}>{order.status}</Badge>
-                  </div>
-
-                  {/* Real Route Map connecting Pickup and Dropoff */}
-                  <DeliveryRouteMap
-                    pickup={{
-                      lat: order.seller?.latitude || riderCoords.lat,
-                      lng: order.seller?.longitude || riderCoords.lng,
-                      name: `${order.seller?.full_name || 'Cloud Kitchen'} (${order.seller?.location || 'Dhaka'})`,
-                    }}
-                    dropoff={{
-                      lat: order.customer?.latitude || riderCoords.lat - 0.02,
-                      lng: order.customer?.longitude || riderCoords.lng + 0.02,
-                      name: `${order.customer?.full_name || 'Customer'}`,
-                    }}
-                    height="220px"
-                  />
-
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
-                    <p className="text-sm text-slate-500">{order.eta} / {order.type} / Value: ৳{Number(order.value).toFixed(2)}</p>
-                    <Button
-                      size="sm"
-                      variant={order.status === 'Delivered' ? 'secondary' : 'primary'}
-                      disabled={order.status === 'Delivered'}
-                      onClick={() => handleUpdateStatus(order.id, order.status)}
-                      icon={<CheckCircle2 className="h-4 w-4" />}
-                    >
-                      {order.status === 'Delivered' ? 'Completed' : `Mark as ${statusFlow[statusFlow.indexOf(order.status) + 1]}`}
-                    </Button>
-                  </div>
+            {deliveryTab === 'active' ? (
+              activeDeliveries.length === 0 ? (
+                <div className="py-8 text-center space-y-2">
+                  <Bike className="mx-auto h-10 w-10 text-slate-300" />
+                  <p className="text-sm text-slate-400">You haven't accepted any active delivery tasks yet.</p>
                 </div>
-              ))
+              ) : (
+                activeDeliveries.map((order) => (
+                  <div key={order.id} className="rounded-xl border border-slate-200 bg-white p-4 space-y-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-xs text-slate-400 font-mono">ID: {order.id}</p>
+                        <p className="font-semibold text-slate-900 mt-1">Item: {order.item_name}</p>
+                        <p className="mt-2 flex items-start gap-2 text-sm text-slate-600">
+                          <MapPin className="h-4 w-4 mt-0.5 text-slate-400" />
+                          <span>Pickup: <strong>{order.seller?.full_name || 'Kitchen'}</strong> ({order.seller?.location || 'Dhaka'})</span>
+                        </p>
+                        <p className="mt-1 flex items-start gap-2 text-sm text-slate-600">
+                          <MapPin className="h-4 w-4 mt-0.5 text-slate-400" />
+                          <span>Dropoff: {order.customer?.full_name || 'Customer'}</span>
+                        </p>
+                      </div>
+                      <Badge variant="warning">{order.status}</Badge>
+                    </div>
+
+                    {/* Real Route Map connecting Pickup and Dropoff */}
+                    <DeliveryRouteMap
+                      pickup={{
+                        lat: order.seller?.latitude || riderCoords.lat,
+                        lng: order.seller?.longitude || riderCoords.lng,
+                        name: `${order.seller?.full_name || 'Cloud Kitchen'} (${order.seller?.location || 'Dhaka'})`,
+                      }}
+                      dropoff={{
+                        lat: order.customer?.latitude || riderCoords.lat - 0.02,
+                        lng: order.customer?.longitude || riderCoords.lng + 0.02,
+                        name: `${order.customer?.full_name || 'Customer'}`,
+                      }}
+                      height="220px"
+                    />
+
+                    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                      <p className="text-sm text-slate-500">{order.eta} / {order.type} / Value: ৳{Number(order.value).toFixed(2)}</p>
+                      <Button
+                        size="sm"
+                        variant="primary"
+                        onClick={() => handleUpdateStatus(order.id, order.status)}
+                        icon={<CheckCircle2 className="h-4 w-4" />}
+                      >
+                        {`Mark as ${statusFlow[statusFlow.indexOf(order.status) + 1]}`}
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )
+            ) : (
+              completedDeliveries.length === 0 ? (
+                <div className="py-8 text-center space-y-2">
+                  <PackageCheck className="mx-auto h-10 w-10 text-slate-300" />
+                  <p className="text-sm text-slate-400">No completed tasks yet.</p>
+                </div>
+              ) : (
+                completedDeliveries.map((order) => (
+                  <div key={order.id} className="rounded-xl border border-slate-100 bg-slate-50/50 p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-slate-400 font-mono">ID: {order.id}</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                        Completed
+                      </span>
+                    </div>
+                    <h4 className="font-semibold text-slate-800 text-sm">Item: {order.item_name}</h4>
+                    <div className="text-xs text-slate-500 space-y-1">
+                      <p>From: <strong>{order.seller?.full_name || 'Kitchen'}</strong></p>
+                      <p>To: <strong>{order.customer?.full_name || 'Customer'}</strong> ({order.customer?.location || 'Dhaka'})</p>
+                    </div>
+                    <div className="border-t border-slate-100 pt-2 flex items-center justify-between text-xs text-slate-500 font-medium">
+                      <span>Value: ৳{Number(order.value).toFixed(2)}</span>
+                      <span>{order.type}</span>
+                    </div>
+                  </div>
+                ))
+              )
             )}
           </div>
         </Card>

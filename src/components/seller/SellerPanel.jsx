@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Clock, Edit3, MapPin, Megaphone, MessageSquare, Plus, ReceiptText, Save } from 'lucide-react';
 import { Badge, Button, Card, Input, MapPicker } from '../common';
 import InboxMessaging from '../customer/InboxMessaging';
@@ -33,6 +33,24 @@ const SellerPanel = () => {
   const [activeOffers, setActiveOffers] = useState([]);
   const [editingOffer, setEditingOffer] = useState(null);
   const [customOrders, setCustomOrders] = useState([]);
+  const [ordersTab, setOrdersTab] = useState('active');
+  const [customOrdersTab, setCustomOrdersTab] = useState('active');
+
+  const activeSellerOrders = useMemo(() => {
+    return orders.filter(o => o.status !== 'Delivered' && o.status !== 'Cancelled');
+  }, [orders]);
+
+  const pastSellerOrders = useMemo(() => {
+    return orders.filter(o => o.status === 'Delivered' || o.status === 'Cancelled');
+  }, [orders]);
+
+  const activeSellerCustomOrders = useMemo(() => {
+    return customOrders.filter(o => o.status !== 'Delivered' && o.status !== 'Cancelled');
+  }, [customOrders]);
+
+  const pastSellerCustomOrders = useMemo(() => {
+    return customOrders.filter(o => o.status === 'Delivered' || o.status === 'Cancelled');
+  }, [customOrders]);
 
   const handleUpdateOrderStatus = async (orderId, newStatus) => {
     try {
@@ -602,82 +620,132 @@ const SellerPanel = () => {
         </Card>
 
         <Card>
-          <div className="mb-5 flex items-center gap-2">
-            <ReceiptText className="h-5 w-5 text-slate-500" />
-            <h3 className="text-xl font-semibold text-slate-900">Order Management</h3>
+          <div className="flex flex-wrap items-center justify-between border-b border-slate-100 pb-3 mb-5 gap-4">
+            <div className="flex items-center gap-2">
+              <ReceiptText className="h-5 w-5 text-slate-500" />
+              <h3 className="text-xl font-semibold text-slate-900">Order Management</h3>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setOrdersTab('active')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  ordersTab === 'active'
+                    ? 'bg-orange-100 text-orange-700'
+                    : 'text-slate-500 hover:bg-slate-100'
+                }`}
+              >
+                Active ({activeSellerOrders.length})
+              </button>
+              <button
+                onClick={() => setOrdersTab('past')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  ordersTab === 'past'
+                    ? 'bg-orange-100 text-orange-700'
+                    : 'text-slate-500 hover:bg-slate-100'
+                }`}
+              >
+                Done ({pastSellerOrders.length})
+              </button>
+            </div>
           </div>
+
           <div className="space-y-3">
-            {orders.length === 0 ? (
-              <p className="text-center py-4 text-sm text-slate-400">No orders found.</p>
+            {ordersTab === 'active' ? (
+              activeSellerOrders.length === 0 ? (
+                <p className="text-center py-4 text-sm text-slate-400">No active orders.</p>
+              ) : (
+                activeSellerOrders.map((order) => (
+                  <div key={order.id} className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-slate-900">{order.customer}</p>
+                        <p className="text-xs text-slate-400 font-mono">ID: {order.id}</p>
+                        <p className="mt-1 text-sm text-slate-700 font-medium">{order.item}</p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <Badge variant={order.type === 'Regular' ? 'success' : 'warning'}>{order.type}</Badge>
+                        <Badge variant={
+                          order.status === 'Pending' ? 'warning' :
+                            order.status === 'Preparing' ? 'primary' :
+                              order.status === 'Ready' ? 'info' : 'success'
+                        } size="sm">
+                          {order.status}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-sm">
+                      <span className="font-semibold text-slate-900">৳{order.value.toFixed(2)}</span>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        {order.status === 'Pending' && (
+                          <>
+                            <Button size="sm" onClick={() => handleUpdateOrderStatus(order.id, 'Preparing')}>
+                              Confirm & Cook
+                            </Button>
+                            <Button size="sm" variant="danger" onClick={() => handleUpdateOrderStatus(order.id, 'Cancelled')}>
+                              Cancel
+                            </Button>
+                          </>
+                        )}
+
+                        {order.status === 'Preparing' && (
+                          <Button size="sm" variant="success" onClick={() => handleUpdateOrderStatus(order.id, 'Ready')}>
+                            Pass to Delivery Man
+                          </Button>
+                        )}
+
+                        {order.status === 'Ready' && (
+                          <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
+                            Passed for Delivery (Awaiting Rider)
+                          </span>
+                        )}
+
+                        {order.status === 'Accepted' && (
+                          <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-200">
+                            Delivery Rider Assigned
+                          </span>
+                        )}
+
+                        {order.status === 'Picked Up' && (
+                          <span className="text-xs font-semibold text-orange-600 bg-orange-50 px-2.5 py-1 rounded-md border border-orange-200">
+                            On The Way to Customer
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )
             ) : (
-              orders.map((order) => (
-                <div key={order.id} className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-semibold text-slate-900">{order.customer}</p>
-                      <p className="text-xs text-slate-400 font-mono">ID: {order.id}</p>
-                      <p className="mt-1 text-sm text-slate-700 font-medium">{order.item}</p>
+              pastSellerOrders.length === 0 ? (
+                <p className="text-center py-4 text-sm text-slate-400">No past orders.</p>
+              ) : (
+                pastSellerOrders.map((order) => (
+                  <div key={order.id} className="rounded-xl border border-slate-200 bg-slate-50/40 p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-slate-800">{order.customer}</p>
+                        <p className="text-xs text-slate-400 font-mono">ID: {order.id}</p>
+                        <p className="mt-1 text-sm text-slate-600 font-medium">{order.item}</p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <Badge variant={order.type === 'Regular' ? 'success' : 'warning'}>{order.type}</Badge>
+                        <Badge variant={order.status === 'Cancelled' ? 'danger' : 'success'} size="sm">
+                          {order.status}
+                        </Badge>
+                      </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <Badge variant={order.type === 'Regular' ? 'success' : 'warning'}>{order.type}</Badge>
-                      <Badge variant={
-                        order.status === 'Pending' ? 'warning' :
-                          order.status === 'Preparing' ? 'primary' :
-                            order.status === 'Ready' ? 'info' :
-                              order.status === 'Cancelled' ? 'danger' : 'success'
-                      } size="sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-sm">
+                      <span className="font-semibold text-slate-700">৳{order.value.toFixed(2)}</span>
+                      <span className={`text-xs font-semibold px-2.5 py-1 rounded-md ${
+                        order.status === 'Cancelled' ? 'text-rose-600 bg-rose-50 border border-rose-200' : 'text-slate-500 bg-slate-100'
+                      }`}>
                         {order.status}
-                      </Badge>
+                      </span>
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 text-sm">
-                    <span className="font-semibold text-slate-900">${order.value.toFixed(2)}</span>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      {order.status === 'Pending' && (
-                        <>
-                          <Button size="sm" onClick={() => handleUpdateOrderStatus(order.id, 'Preparing')}>
-                            Confirm & Cook
-                          </Button>
-                          <Button size="sm" variant="danger" onClick={() => handleUpdateOrderStatus(order.id, 'Cancelled')}>
-                            Cancel
-                          </Button>
-                        </>
-                      )}
-
-                      {order.status === 'Preparing' && (
-                        <Button size="sm" variant="success" onClick={() => handleUpdateOrderStatus(order.id, 'Ready')}>
-                          Pass to Delivery Man
-                        </Button>
-                      )}
-
-                      {order.status === 'Ready' && (
-                        <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
-                          Passed for Delivery (Awaiting Rider)
-                        </span>
-                      )}
-
-                      {order.status === 'Accepted' && (
-                        <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-200">
-                          Delivery Rider Assigned
-                        </span>
-                      )}
-
-                      {order.status === 'Picked Up' && (
-                        <span className="text-xs font-semibold text-orange-600 bg-orange-50 px-2.5 py-1 rounded-md border border-orange-200">
-                          On The Way to Customer
-                        </span>
-                      )}
-
-                      {order.status === 'Delivered' && (
-                        <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">
-                          Delivered
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))
+                ))
+              )
             )}
           </div>
         </Card>
@@ -849,7 +917,7 @@ const SellerPanel = () => {
 
       {/* ── Custom Order Requests ── */}
       <Card>
-        <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-4">
           <div className="flex items-start gap-3">
             <div className="rounded-2xl bg-indigo-50 p-2.5 text-indigo-600">
               <ReceiptText className="h-5 w-5" />
@@ -861,13 +929,29 @@ const SellerPanel = () => {
               </p>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-700">
-              {customOrders.filter(o => o.status === 'Pending').length} pending
-            </span>
-            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">
-              {customOrders.filter(o => o.status === 'Preparing' || o.status === 'Ready').length} active
-            </span>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex gap-2">
+              <button
+                onClick={() => setCustomOrdersTab('active')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  customOrdersTab === 'active'
+                    ? 'bg-orange-100 text-orange-700'
+                    : 'text-slate-500 hover:bg-slate-100'
+                }`}
+              >
+                Active ({activeSellerCustomOrders.length})
+              </button>
+              <button
+                onClick={() => setCustomOrdersTab('past')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  customOrdersTab === 'past'
+                    ? 'bg-orange-100 text-orange-700'
+                    : 'text-slate-500 hover:bg-slate-100'
+                }`}
+              >
+                History ({pastSellerCustomOrders.length})
+              </button>
+            </div>
           </div>
         </div>
 
@@ -879,86 +963,129 @@ const SellerPanel = () => {
           </div>
         ) : (
           <div className="grid gap-4">
-            {customOrders.map((co) => {
-              const isPending = co.status === 'Pending';
-              const isActive = co.status === 'Preparing' || co.status === 'Ready';
-              const isRejected = co.status === 'Cancelled';
-              const statusStyles = isPending
-                ? 'border-amber-200 bg-gradient-to-br from-amber-50 to-white'
-                : isRejected
-                  ? 'border-rose-100 bg-gradient-to-br from-rose-50/60 to-white opacity-75'
-                  : 'border-emerald-200 bg-gradient-to-br from-emerald-50/60 to-white';
+            {customOrdersTab === 'active' ? (
+              activeSellerCustomOrders.length === 0 ? (
+                <p className="text-center py-4 text-sm text-slate-400">No active custom requests.</p>
+              ) : (
+                activeSellerCustomOrders.map((co) => {
+                  const isPending = co.status === 'Pending';
+                  const isActive = co.status === 'Preparing' || co.status === 'Ready';
 
-              return (
-                <div key={co.id} className={`rounded-2xl border p-4 shadow-sm ${statusStyles}`}>
-                  <div className="flex flex-wrap items-start justify-between gap-4">
-                    <div className="space-y-2 flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-bold text-slate-900 text-sm">{co.item || 'Custom Food Request'}</p>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isPending ? 'bg-amber-100 text-amber-800'
-                            : isRejected ? 'bg-rose-100 text-rose-800'
-                              : 'bg-emerald-100 text-emerald-800'
-                          }`}>
-                          {co.status}
-                        </span>
-                      </div>
+                  return (
+                    <div key={co.id} className={`rounded-2xl border p-4 shadow-sm ${
+                      isPending ? 'border-amber-200 bg-gradient-to-br from-amber-50 to-white' : 'border-emerald-200 bg-gradient-to-br from-emerald-50/60 to-white'
+                    }`}>
+                      <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div className="space-y-2 flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-bold text-slate-900 text-sm">{co.item || 'Custom Food Request'}</p>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isPending ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                              {co.status}
+                            </span>
+                          </div>
 
-                      <div className="flex flex-wrap gap-2 text-[10px] font-semibold text-slate-500">
-                        <span className="rounded-full border border-slate-200 bg-white px-2 py-1">From {co.customer}</span>
-                        <span className="rounded-full border border-slate-200 bg-white px-2 py-1">COD</span>
-                        <span className="rounded-full border border-slate-200 bg-white px-2 py-1">৳{Number(co.value || 0).toFixed(2)}</span>
-                      </div>
+                          <div className="flex flex-wrap gap-2 text-[10px] font-semibold text-slate-500">
+                            <span className="rounded-full border border-slate-200 bg-white px-2 py-1">From {co.customer}</span>
+                            <span className="rounded-full border border-slate-200 bg-white px-2 py-1">COD</span>
+                            <span className="rounded-full border border-slate-200 bg-white px-2 py-1">৳{Number(co.value || 0).toFixed(2)}</span>
+                          </div>
 
-                      {co.details?.description && (
-                        <p className="text-xs text-slate-600 leading-5 line-clamp-2">{co.details.description}</p>
-                      )}
+                          {co.details?.description && (
+                            <p className="text-xs text-slate-600 leading-5 line-clamp-2">{co.details.description}</p>
+                          )}
 
-                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-500 font-medium">
-                        <span>Urgency: {co.details?.urgency || 'standard'}</span>
-                        <span>{isPending ? 'Waiting for kitchen approval' : isActive ? 'Kitchen is preparing this order' : 'Rejected by kitchen'}</span>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-500 font-medium">
+                            <span>Urgency: {co.details?.urgency || 'standard'}</span>
+                            <span>{isPending ? 'Waiting for kitchen approval' : 'Kitchen is preparing this order'}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex shrink-0 flex-wrap gap-2">
+                          {isPending && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => handleCustomOrderAction(co.id, 'Preparing')}
+                                className="rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-emerald-700"
+                              >
+                                Accept Request
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleCustomOrderAction(co.id, 'Cancelled')}
+                                className="rounded-xl border border-rose-200 bg-white px-3.5 py-2 text-xs font-bold text-rose-700 transition-colors hover:bg-rose-50"
+                              >
+                                Reject
+                              </button>
+                            </>
+                          )}
+
+                          {isActive && co.status !== 'Ready' && (
+                            <button
+                              type="button"
+                              onClick={() => handleCustomOrderAction(co.id, 'Ready')}
+                              className="rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-indigo-700"
+                            >
+                              Pass to Delivery Man
+                            </button>
+                          )}
+
+                          {co.status === 'Ready' && (
+                            <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
+                              Awaiting Rider Pickup
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
+                  );
+                })
+              )
+            ) : (
+              pastSellerCustomOrders.length === 0 ? (
+                <p className="text-center py-4 text-sm text-slate-400">No custom order history.</p>
+              ) : (
+                pastSellerCustomOrders.map((co) => {
+                  const isRejected = co.status === 'Cancelled';
+                  return (
+                    <div key={co.id} className={`rounded-2xl border p-4 shadow-sm bg-slate-50/40 ${
+                      isRejected ? 'border-rose-100' : 'border-emerald-100'
+                    }`}>
+                      <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div className="space-y-2 flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-bold text-slate-800 text-sm">{co.item || 'Custom Food Request'}</p>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              isRejected ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'
+                            }`}>
+                              {co.status}
+                            </span>
+                          </div>
 
-                    <div className="flex shrink-0 flex-wrap gap-2">
-                      {isPending && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => handleCustomOrderAction(co.id, 'Preparing')}
-                            className="rounded-xl bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-emerald-700"
-                          >
-                            Accept Request
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleCustomOrderAction(co.id, 'Cancelled')}
-                            className="rounded-xl border border-rose-200 bg-white px-3.5 py-2 text-xs font-bold text-rose-700 transition-colors hover:bg-rose-50"
-                          >
-                            Reject
-                          </button>
-                        </>
-                      )}
+                          <div className="flex flex-wrap gap-2 text-[10px] font-semibold text-slate-500">
+                            <span className="rounded-full border border-slate-200 bg-white px-2 py-1">From {co.customer}</span>
+                            <span className="rounded-full border border-slate-200 bg-white px-2 py-1">COD</span>
+                            <span className="rounded-full border border-slate-200 bg-white px-2 py-1">৳{Number(co.value || 0).toFixed(2)}</span>
+                          </div>
+                        </div>
 
-                      {isActive && (
-                        <button
-                          type="button"
-                          onClick={() => handleCustomOrderAction(co.id, 'Ready')}
-                          className="rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-indigo-700"
-                        >
-                          Pass to Delivery Man
-                        </button>
-                      )}
-
-                      {isRejected && (
-                        <span className="rounded-xl border border-rose-200 bg-white px-3.5 py-2 text-xs font-bold text-rose-700">
-                          Rejected
-                        </span>
-                      )}
+                        <div className="flex shrink-0 flex-wrap gap-2">
+                          {isRejected ? (
+                            <span className="text-xs font-semibold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-md border border-rose-200">
+                              Rejected
+                            </span>
+                          ) : (
+                            <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md">
+                              Delivered
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              );
-            })}
+                  );
+                })
+              )
+            )}
           </div>
         )}
       </Card>

@@ -193,9 +193,69 @@ export async function confirmPayment(orderId: string, stripeSessionId: string) {
   }
 }
 
+// Auto-cancel regular orders that have been active and not completed for more than 3 hours
+export async function autoCancelStaleOrders() {
+  try {
+    const threeHoursAgo = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+    const { error } = await supabaseAdmin
+      .from('orders')
+      .update({
+        status: 'Cancelled',
+        updated_at: new Date().toISOString()
+      })
+      .lt('created_at', threeHoursAgo)
+      .in('status', ['Pending', 'Preparing', 'Ready', 'Accepted', 'Picked Up']);
+
+    if (error) {
+      console.error('[Orders Service] Error auto-cancelling stale orders:', error);
+    }
+  } catch (err) {
+    console.error('[Orders Service] Exception in autoCancelStaleOrders:', err);
+  }
+}
+
+// Auto-cancel custom orders based on their urgency timelines: standard (2 days), express (1 day), asap (5 hours)
+export async function autoCancelStaleCustomOrders() {
+  try {
+    const now = Date.now();
+    const fiveHoursAgo = new Date(now - 5 * 60 * 60 * 1000).toISOString();
+    const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000).toISOString();
+    const twoDaysAgo = new Date(now - 48 * 60 * 60 * 1000).toISOString();
+
+    // 1. ASAP (Cancel after 5 hours)
+    await supabaseAdmin
+      .from('custom_orders')
+      .update({ status: 'Cancelled', updated_at: new Date().toISOString() })
+      .eq('urgency', 'asap')
+      .lt('created_at', fiveHoursAgo)
+      .in('status', ['Pending', 'Preparing', 'Ready']);
+
+    // 2. Express (Cancel after 24 hours)
+    await supabaseAdmin
+      .from('custom_orders')
+      .update({ status: 'Cancelled', updated_at: new Date().toISOString() })
+      .eq('urgency', 'express')
+      .lt('created_at', oneDayAgo)
+      .in('status', ['Pending', 'Preparing', 'Ready']);
+
+    // 3. Standard (Cancel after 48 hours)
+    await supabaseAdmin
+      .from('custom_orders')
+      .update({ status: 'Cancelled', updated_at: new Date().toISOString() })
+      .eq('urgency', 'standard')
+      .lt('created_at', twoDaysAgo)
+      .in('status', ['Pending', 'Preparing', 'Ready']);
+
+  } catch (err) {
+    console.error('[Orders Service] Exception in autoCancelStaleCustomOrders:', err);
+  }
+}
+
 // 3. Fetch orders for customer
 export async function getCustomerOrders(customerId: string) {
   try {
+    await autoCancelStaleOrders();
+
     const { data, error } = await supabaseAdmin
       .from('orders')
       .select(`
@@ -204,7 +264,6 @@ export async function getCustomerOrders(customerId: string) {
         delivery_partner:profiles!delivery_partner_id(full_name, phone)
       `)
       .eq('customer_id', customerId)
-      .neq('status', 'Cancelled')
       .or('payment_status.eq.paid,payment_method.eq.cash_on_delivery')
       .order('created_at', { ascending: false });
 
@@ -219,6 +278,7 @@ export async function getCustomerOrders(customerId: string) {
 // 3b. Fetch custom order requests placed by a customer
 export async function getCustomerCustomOrders(customerId: string) {
   try {
+    await autoCancelStaleCustomOrders();
     const { data, error } = await supabaseAdmin
       .from('custom_orders')
       .select(`

@@ -73,6 +73,7 @@ function App() {
   const [customerOrdersLoaded, setCustomerOrdersLoaded] = useState(false);
   const [customerCustomOrders, setCustomerCustomOrders] = useState([]);
   const [activeTrackingOrderId, setActiveTrackingOrderId] = useState(null);
+  const [trackTab, setTrackTab] = useState('active');
   const hasSelectedCustomerLocation = isValidCustomerLocation(customerLocation);
 
   useEffect(() => {
@@ -233,20 +234,12 @@ function App() {
     });
   }, [realFoods, claimedDeals, hasSelectedCustomerLocation]);
 
-  const trackingOrders = useMemo(() => {
-    return customerOrders.filter((order) => {
-      const createdTime = new Date(order.created_at);
-      const ageMins = (Date.now() - createdTime.getTime()) / 60000;
+  const activeOrders = useMemo(() => {
+    return customerOrders.filter(o => o.status !== 'Delivered' && o.status !== 'Cancelled');
+  }, [customerOrders]);
 
-      const isCompleted = order.status === 'Delivered' || order.status === 'Cancelled';
-      if (isCompleted) {
-        // Only show completed orders for up to 60 minutes (1 hour)
-        return ageMins <= 60;
-      }
-
-      // Always show active (uncompleted) orders
-      return true;
-    });
+  const pastOrders = useMemo(() => {
+    return customerOrders.filter(o => o.status === 'Delivered' || o.status === 'Cancelled');
   }, [customerOrders]);
 
   useEffect(() => {
@@ -453,12 +446,40 @@ function App() {
   };
 
   const handleOrder = (item) => {
-    const existingCount = cartItems.filter(i => i.id === item.id).length;
-    if (existingCount >= item.stock) {
-      alert(`Cannot add more! Only ${item.stock} unit(s) of "${item.name}" available in stock.`);
-      return;
-    }
-    setCartItems((prev) => [...prev, item]);
+    setCartItems((prev) => {
+      const existing = prev.find((i) => i.id === item.id);
+      if (existing) {
+        if (existing.quantity >= item.stock) {
+          alert(`Cannot add more! Only ${item.stock} unit(s) of "${item.name}" available in stock.`);
+          return prev;
+        }
+        return prev.map((i) => i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i);
+      } else {
+        if (item.stock <= 0) {
+          alert(`"${item.name}" is out of stock!`);
+          return prev;
+        }
+        return [...prev, { ...item, quantity: 1 }];
+      }
+    });
+  };
+
+  const handleUpdateQuantity = (id, newQty) => {
+    setCartItems((prev) => {
+      if (newQty <= 0) {
+        return prev.filter((item) => item.id !== id);
+      }
+      return prev.map((item) => {
+        if (item.id === id) {
+          if (newQty > item.stock) {
+            alert(`Cannot add more! Only ${item.stock} unit(s) of "${item.name}" available in stock.`);
+            return item;
+          }
+          return { ...item, quantity: newQty };
+        }
+        return item;
+      });
+    });
   };
 
   const handleRemoveItem = (id) => {
@@ -499,12 +520,13 @@ function App() {
       return;
     }
 
-    const totalVal = cartItems.reduce((sum, item) => sum + item.price, 0) + 2.99;
+    const flatItems = cartItems.flatMap(item => Array(item.quantity || 1).fill(item));
+    const totalVal = flatItems.reduce((sum, item) => sum + item.price, 0) + 2.99;
 
     try {
       // 1. Group items by sellerId
       const groups = {};
-      cartItems.forEach((item) => {
+      flatItems.forEach((item) => {
         const sId = item.sellerId || session?.id || 'default';
         if (!groups[sId]) groups[sId] = [];
         groups[sId].push(item);
@@ -560,7 +582,7 @@ function App() {
           body: JSON.stringify({
             order_id: orderIdsStr,
             value: totalVal,
-            item_name: cartItems.map(i => i.name).join(', '),
+            item_name: flatItems.map(i => i.name).join(', '),
             origin: window.location.origin,
           }),
         });
@@ -672,79 +694,155 @@ function App() {
       )}
 
       {/* Track Your Orders Section */}
-      {trackingOrders.length > 0 && (
+      {customerOrders.length > 0 && (
         <section className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs">
-          <div className="flex items-center gap-2 mb-4">
-            <span className="text-orange-500 text-lg">📦</span>
-            <h3 className="text-base font-bold text-slate-900">Track Your Orders</h3>
-            <span className="bg-orange-100 text-orange-700 text-xs px-2 py-0.5 rounded-full font-bold">
-              {trackingOrders.length}
-            </span>
+          <div className="flex flex-wrap items-center justify-between border-b border-slate-100 pb-3 mb-4 gap-4">
+            <div className="flex items-center gap-2">
+              <span className="text-orange-500 text-lg">📦</span>
+              <h3 className="text-base font-bold text-slate-900">Track Your Orders</h3>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setTrackTab('active')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  trackTab === 'active'
+                    ? 'bg-orange-100 text-orange-700'
+                    : 'text-slate-500 hover:bg-slate-100'
+                }`}
+              >
+                Active ({activeOrders.length})
+              </button>
+              <button
+                onClick={() => setTrackTab('past')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  trackTab === 'past'
+                    ? 'bg-orange-100 text-orange-700'
+                    : 'text-slate-500 hover:bg-slate-100'
+                }`}
+              >
+                History ({pastOrders.length})
+              </button>
+            </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {trackingOrders.map((order) => {
-              const createdTime = new Date(order.created_at);
-              const ageMins = isNaN(createdTime.getTime())
-                ? 0
-                : Math.round((Date.now() - createdTime.getTime()) / 60000);
-              const isCompleted = order.status === 'Delivered' || order.status === 'Cancelled';
-              const isDelayed = !isCompleted && ageMins > 45;
-              const isValidDate = !isNaN(createdTime.getTime());
-              const timeString = isValidDate
-                ? createdTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                : 'Unknown time';
+          {trackTab === 'active' ? (
+            activeOrders.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-8">No active orders right now.</p>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {activeOrders.map((order) => {
+                  const createdTime = new Date(order.created_at);
+                  const ageMins = isNaN(createdTime.getTime())
+                    ? 0
+                    : Math.round((Date.now() - createdTime.getTime()) / 60000);
+                  const isDelayed = ageMins > 45;
+                  const isValidDate = !isNaN(createdTime.getTime());
+                  const timeString = isValidDate
+                    ? createdTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    : 'Unknown time';
 
-              return (
-                <div
-                  key={order.id}
-                  className={`border rounded-xl p-4 flex flex-col justify-between transition-all hover:shadow-xs bg-slate-50/50 ${isDelayed ? 'border-amber-300 bg-amber-50/10' : 'border-slate-200'
-                    }`}
-                >
-                  <div>
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                        Order status
-                      </span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${isCompleted
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : order.status === 'Ready' || order.status === 'Picked Up'
-                          ? 'bg-blue-100 text-blue-800 animate-pulse'
-                          : 'bg-orange-100 text-orange-800'
-                        }`}>
-                        {order.status}
-                      </span>
-                    </div>
-
-                    <h4 className="font-bold text-slate-800 text-sm truncate">{order.item_name}</h4>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Kitchen: <strong>{order.seller?.shop_name || 'Cloud Kitchen'}</strong>
-                    </p>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      Placed: {timeString} ({ageMins} mins ago)
-                    </p>
-
-                    {/* Delayed Warning */}
-                    {isDelayed && (
-                      <p className="text-[11px] text-amber-700 bg-amber-100/50 rounded-lg p-2 mt-2 font-medium flex items-center gap-1">
-                        ⚠️ Order is not complete (Delayed)
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="border-t border-slate-100 mt-3 pt-3 flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-900">৳{order.value}</span>
-                    <button
-                      onClick={() => setActiveTrackingOrderId(order.id)}
-                      className="text-xs font-bold text-orange-600 hover:text-orange-800 bg-orange-50 hover:bg-orange-100/80 px-3.5 py-1.5 rounded-lg transition-all"
+                  return (
+                    <div
+                      key={order.id}
+                      className={`border rounded-xl p-4 flex flex-col justify-between transition-all hover:shadow-xs bg-slate-50/50 ${isDelayed ? 'border-amber-300 bg-amber-50/10' : 'border-slate-200'
+                        }`}
                     >
-                      Track Live 🗺️
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                            Order status
+                          </span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-800">
+                            {order.status}
+                          </span>
+                        </div>
+
+                        <h4 className="font-bold text-slate-800 text-sm truncate">{order.item_name}</h4>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Kitchen: <strong>{order.seller?.shop_name || 'Cloud Kitchen'}</strong>
+                        </p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Placed: {timeString} ({ageMins} mins ago)
+                        </p>
+
+                        {/* Delayed Warning */}
+                        {isDelayed && (
+                          <p className="text-[11px] text-amber-700 bg-amber-100/50 rounded-lg p-2 mt-2 font-medium flex items-center gap-1">
+                            ⚠️ Order is not complete (Delayed)
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="border-t border-slate-100 mt-3 pt-3 flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-900">৳{order.value}</span>
+                        <button
+                          onClick={() => setActiveTrackingOrderId(order.id)}
+                          className="text-xs font-bold text-orange-600 hover:text-orange-800 bg-orange-50 hover:bg-orange-100/80 px-3.5 py-1.5 rounded-lg transition-all"
+                        >
+                          Track Live 🗺️
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          ) : (
+            pastOrders.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-8">No order history found.</p>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {pastOrders.map((order) => {
+                  const createdTime = new Date(order.created_at);
+                  const isValidDate = !isNaN(createdTime.getTime());
+                  const dateString = isValidDate
+                    ? createdTime.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' + createdTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    : 'Unknown date';
+
+                  return (
+                    <div
+                      key={order.id}
+                      className="border border-slate-200 rounded-xl p-4 flex flex-col justify-between transition-all bg-white hover:shadow-xs"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                            Order Completed
+                          </span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${order.status === 'Delivered'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-rose-100 text-rose-800'
+                            }`}>
+                            {order.status}
+                          </span>
+                        </div>
+
+                        <h4 className="font-bold text-slate-800 text-sm truncate">{order.item_name}</h4>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Kitchen: <strong>{order.seller?.shop_name || 'Cloud Kitchen'}</strong>
+                        </p>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Date: {dateString}
+                        </p>
+                      </div>
+
+                      <div className="border-t border-slate-100 mt-3 pt-3 flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-900">৳{order.value}</span>
+                        {order.status === 'Delivered' && (
+                          <button
+                            onClick={() => setActiveTrackingOrderId(order.id)}
+                            className="text-xs font-bold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-3.5 py-1.5 rounded-lg transition-all"
+                          >
+                            View Details 🗺️
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )
+          )}
         </section>
       )}
 
@@ -803,6 +901,7 @@ function App() {
           <ShoppingCart
             items={cartItems}
             onRemove={handleRemoveItem}
+            onUpdateQuantity={handleUpdateQuantity}
             onCheckout={handleCheckout}
           />
         </section>
@@ -817,8 +916,6 @@ function App() {
 
       <OffersFlashDeals
         deals={flashDeals}
-        promoCode={promoCode}
-        onPromoChange={setPromoCode}
         onClaimDeal={handleClaimDeal}
       />
 
@@ -895,9 +992,9 @@ function App() {
                 <Button variant="secondary" size="sm" className="rounded-lg">
                   <CartIcon className="h-4 w-4" />
                   Cart
-                  {cartItems.length > 0 && (
+                  {cartItems.reduce((sum, i) => sum + (i.quantity || 1), 0) > 0 && (
                     <span className="flex h-5 w-5 items-center justify-center rounded-full bg-orange-500 text-xs font-medium text-white">
-                      {cartItems.length}
+                      {cartItems.reduce((sum, i) => sum + (i.quantity || 1), 0)}
                     </span>
                   )}
                 </Button>
